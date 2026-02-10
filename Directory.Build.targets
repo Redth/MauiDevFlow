@@ -1,33 +1,5 @@
 <Project>
   <!--
-    Local development workaround: When referencing MauiDevFlow.Blazor as a ProjectReference
-    (rather than a NuGet package), the .targets file in build/ is NOT auto-imported.
-    This Directory.Build.targets replicates what the NuGet .targets does: it copies
-    chobitsu.js into the consuming app's wwwroot/js/ directory at build time so the
-    Razor SDK's static web asset pipeline picks it up for all platforms (iOS, Mac, Android).
-    
-    NuGet consumers don't need this — the packaged Redth.MauiDevFlow.Blazor.targets handles it.
-  -->
-  <PropertyGroup>
-    <_ChobitsuJsSource>$(MSBuildThisFileDirectory)src\MauiDevFlow.Blazor\content\wwwroot\js\chobitsu.js</_ChobitsuJsSource>
-    <_ChobitsuJsDest>$(MSBuildProjectDirectory)\wwwroot\js\chobitsu.js</_ChobitsuJsDest>
-  </PropertyGroup>
-
-  <Target Name="_CopyChobitsuToWwwroot"
-          BeforeTargets="StaticWebAssetsPrepareForRun;Build"
-          Condition="'$(Configuration)' == 'Debug' AND '$(ApplicationId)' != '' AND Exists('$(_ChobitsuJsSource)')">
-    <MakeDir Directories="$(MSBuildProjectDirectory)\wwwroot\js" />
-    <Copy SourceFiles="$(_ChobitsuJsSource)"
-          DestinationFiles="$(_ChobitsuJsDest)"
-          SkipUnchangedFiles="true" />
-  </Target>
-
-  <Target Name="_CleanChobitsuFromWwwroot" AfterTargets="Clean"
-          Condition="Exists('$(_ChobitsuJsDest)')">
-    <Delete Files="$(_ChobitsuJsDest)" />
-  </Target>
-
-  <!--
     Local development: Import Agent .targets for MauiDevFlowPort MSBuild property support.
     NuGet consumers get this automatically from the package's build/ folder.
   -->

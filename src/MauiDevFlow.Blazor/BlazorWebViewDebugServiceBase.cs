@@ -113,9 +113,8 @@ public abstract class BlazorWebViewDebugServiceBase : IDisposable
                     "document.querySelector('script[src*=\"chobitsu\"]') ? 'found' : 'missing'");
                 if (hasTag?.ToString() == "missing")
                 {
-                    Log("[BlazorDevFlow] ❌ Missing required script tag in wwwroot/index.html.");
-                    Log("[BlazorDevFlow] Add this before </body>:  <script src=\"chobitsu.js\"></script>");
-                    Log("[BlazorDevFlow] The chobitsu.js file is delivered automatically by the Redth.MauiDevFlow.Blazor NuGet package as a static web asset.");
+                    Log("[BlazorDevFlow] ❌ chobitsu.js not found. The JS initializer should inject it automatically.");
+                    Log("[BlazorDevFlow] Verify the Redth.MauiDevFlow.Blazor package/project is referenced and the Blazor WebView has loaded.");
                     return;
                 }
             }

@@ -7,6 +7,12 @@
     <SingleProject>true</SingleProject>
     <IsPackable>true</IsPackable>
 
+    <!-- Suppress library-level blazor.modules.json generation.
+         The consuming app generates the manifest and includes our JS initializer module.
+         Without this, the library's manifest conflicts with the app's manifest because both
+         target _framework/blazor.modules.json (same issue as the _framework/ conflict below). -->
+    <GenerateJSModuleManifest>false</GenerateJSModuleManifest>
+
     <!-- NuGet Package Metadata -->
     <PackageId>Redth.MauiDevFlow.Blazor</PackageId>
     <Description>Enable browser developer tools and Playwright MCP automation for .NET MAUI Blazor Hybrid apps. Connects Chrome DevTools Protocol to BlazorWebView via Chobitsu.</Description>
