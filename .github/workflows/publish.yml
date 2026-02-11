@@ -30,7 +30,7 @@ jobs:
 
   publish:
     needs: build-and-test
-    runs-on: macos-latest
+    runs-on: windows-latest
     permissions:
       contents: read
       packages: write
@@ -54,6 +54,7 @@ jobs:
 
       - name: Determine version
         id: version
+        shell: bash
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
           # Strip leading 'v' if present (e.g., v1.2.3 -> 1.2.3)
