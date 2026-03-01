@@ -107,6 +107,11 @@ public partial class MainPage : ContentPage
         });
     }
 
+    private async void OnShowModal(object? sender, EventArgs e)
+    {
+        await Navigation.PushModalAsync(new ModalTestPage());
+    }
+
     private void OnAddTodo(object? sender, EventArgs e)
     {
         var text = NewTodoEntry.Text?.Trim();

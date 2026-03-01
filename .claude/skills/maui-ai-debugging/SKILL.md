@@ -348,6 +348,10 @@ their input.
 
 ## Tips
 
+- **Prefer element screenshots over full-window screenshots** when verifying a specific control
+  or area of the UI. Use `--id <elementId>` or `--selector "Type"` to capture just the relevant
+  element — this produces a much smaller image, reducing token usage and improving response speed.
+  Reserve full-window screenshots for layout verification or when you need to see overall context.
 - **Use `maui-devflow batch`** for multi-step interactions — resolves port once, adds delays,
   returns structured JSONL. See [references/batch.md](references/batch.md).
 - **Always use `maui-devflow MAUI screenshot`** — captures in-process, app does NOT need

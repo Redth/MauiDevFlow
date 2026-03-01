@@ -67,6 +67,10 @@ public class PlatformAgentService : DevFlowAgentService
                     window = nsWindow;
             }
 
+            // If a modal sheet is attached, capture it instead of the main window
+            if (window?.AttachedSheet is NSWindow sheet)
+                window = sheet;
+
             // Use CGWindowListCreateImage for composited capture including layer-backed controls
             if (window != null)
             {

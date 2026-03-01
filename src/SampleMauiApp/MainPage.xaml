@@ -11,14 +11,31 @@
 
         <!-- Header -->
         <VerticalStackLayout Grid.Row="0" Spacing="4" Padding="0,8,0,16">
-            <Label Text="📝 My Todos"
-                   FontSize="28"
-                   FontAttributes="Bold"
-                   AutomationId="HeaderLabel">
-                <Label.TextColor>
-                    <AppThemeBinding Light="#1C1B1F" Dark="#E6E1E5" />
-                </Label.TextColor>
-            </Label>
+            <Grid ColumnDefinitions="*,Auto">
+                <Label Text="📝 My Todos"
+                       FontSize="28"
+                       FontAttributes="Bold"
+                       AutomationId="HeaderLabel">
+                    <Label.TextColor>
+                        <AppThemeBinding Light="#1C1B1F" Dark="#E6E1E5" />
+                    </Label.TextColor>
+                </Label>
+                <Button Grid.Column="1"
+                        Text="Show Modal"
+                        FontSize="12"
+                        CornerRadius="8"
+                        Padding="12,4"
+                        VerticalOptions="Center"
+                        AutomationId="ShowModalButton"
+                        Clicked="OnShowModal">
+                    <Button.BackgroundColor>
+                        <AppThemeBinding Light="#6750A4" Dark="#D0BCFF" />
+                    </Button.BackgroundColor>
+                    <Button.TextColor>
+                        <AppThemeBinding Light="#FFFFFF" Dark="#381E72" />
+                    </Button.TextColor>
+                </Button>
+            </Grid>
             <Label x:Name="CountLabel"
                    Text="0 items"
                    FontSize="14"

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="SampleMauiApp.ModalTestPage"
+             Title="Modal Page"
+             AutomationId="ModalTestPage">
+    <ContentPage.BackgroundColor>
+        <AppThemeBinding Light="#F5F5F5" Dark="#1C1B1F" />
+    </ContentPage.BackgroundColor>
+
+    <VerticalStackLayout Spacing="12" Padding="20" VerticalOptions="Center">
+        <Label Text="🔲 Modal Page"
+               FontSize="18"
+               FontAttributes="Bold"
+               HorizontalOptions="Center"
+               AutomationId="ModalTitle">
+            <Label.TextColor>
+                <AppThemeBinding Light="#1C1B1F" Dark="#E6E1E5" />
+            </Label.TextColor>
+        </Label>
+
+        <Label Text="This page was pushed modally."
+               FontSize="13"
+               HorizontalOptions="Center"
+               AutomationId="ModalDescription">
+            <Label.TextColor>
+                <AppThemeBinding Light="#49454F" Dark="#CAC4D0" />
+            </Label.TextColor>
+        </Label>
+
+        <Button Text="Close Modal"
+                FontSize="13"
+                CornerRadius="8"
+                Padding="16,8"
+                HorizontalOptions="Center"
+                AutomationId="CloseModalButton"
+                Clicked="OnCloseModal">
+            <Button.BackgroundColor>
+                <AppThemeBinding Light="#6750A4" Dark="#D0BCFF" />
+            </Button.BackgroundColor>
+            <Button.TextColor>
+                <AppThemeBinding Light="#FFFFFF" Dark="#381E72" />
+            </Button.TextColor>
+        </Button>
+    </VerticalStackLayout>
+</ContentPage>

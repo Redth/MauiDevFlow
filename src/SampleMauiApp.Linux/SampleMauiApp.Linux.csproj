@@ -29,6 +29,7 @@
     <Compile Include="..\SampleMauiApp\BlazorTodoPage.xaml.cs" Link="BlazorTodoPage.xaml.cs" />
     <Compile Include="..\SampleMauiApp\DialogTestPage.xaml.cs" Link="DialogTestPage.xaml.cs" />
     <Compile Include="..\SampleMauiApp\InteractionTestPage.xaml.cs" Link="InteractionTestPage.xaml.cs" />
+    <Compile Include="..\SampleMauiApp\ModalTestPage.xaml.cs" Link="ModalTestPage.xaml.cs" />
     <Compile Include="..\SampleMauiApp\TodoService.cs" Link="TodoService.cs" />
     <Compile Include="..\SampleMauiApp\TodoItem.cs" Link="TodoItem.cs" />
     <Compile Include="..\SampleMauiApp\DebugFileLogger.cs" Link="DebugFileLogger.cs" />
@@ -42,6 +43,7 @@
     <MauiXaml Include="..\SampleMauiApp\BlazorTodoPage.xaml" Link="BlazorTodoPage.xaml" />
     <MauiXaml Include="..\SampleMauiApp\DialogTestPage.xaml" Link="DialogTestPage.xaml" />
     <MauiXaml Include="..\SampleMauiApp\InteractionTestPage.xaml" Link="InteractionTestPage.xaml" />
+    <MauiXaml Include="..\SampleMauiApp\ModalTestPage.xaml" Link="ModalTestPage.xaml" />
   </ItemGroup>
 
   <!-- Resources are symlinked from SampleMauiApp -->
