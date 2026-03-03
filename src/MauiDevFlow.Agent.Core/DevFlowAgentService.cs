@@ -144,6 +144,7 @@ public class DevFlowAgentService : IDisposable
         _server.MapGet("/api/query", HandleQuery);
         _server.MapGet("/api/screenshot", HandleScreenshot);
         _server.MapGet("/api/property/{id}/{name}", HandleProperty);
+        _server.MapGet("/api/properties/{id}", HandleProperties);
         _server.MapPost("/api/property/{id}/{name}", HandleSetProperty);
         _server.MapPost("/api/action/tap", HandleTap);
         _server.MapPost("/api/action/fill", HandleFill);
@@ -447,6 +448,162 @@ public class DevFlowAgentService : IDisposable
         return value != null
             ? HttpResponse.Json(new { id, property = propName, value })
             : HttpResponse.NotFound($"Property '{propName}' not found on element '{id}'");
+    }
+
+    private async Task<HttpResponse> HandleProperties(HttpRequest request)
+    {
+        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+        if (!request.RouteParams.TryGetValue("id", out var id))
+            return HttpResponse.Error("Element ID required");
+
+        request.QueryParams.TryGetValue("category", out var categoryFilter);
+        request.QueryParams.TryGetValue("interface", out var interfaceFilter);
+
+        var result = await DispatchAsync(() =>
+        {
+            var el = _treeWalker.GetElementById(id, _app);
+            if (el == null) return (PropertiesResponse?)null;
+
+            var elType = el.GetType();
+            var response = new PropertiesResponse
+            {
+                Id = id,
+                Type = elType.Name,
+                FullType = elType.FullName ?? elType.Name,
+            };
+
+            // Collect interface names (filtered to MAUI/Microsoft namespaces for relevance)
+            var interfaces = elType.GetInterfaces()
+                .Where(i => i.Namespace?.StartsWith("Microsoft.Maui") == true)
+                .ToList();
+            response.Interfaces = interfaces.Select(i => i.Name).Distinct().OrderBy(n => n).ToList();
+
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var properties = new List<PropertyDetail>();
+
+            // 1. BindableProperties — discover via static fields on type hierarchy
+            if (categoryFilter == null || categoryFilter.Equals("bindable", StringComparison.OrdinalIgnoreCase))
+            {
+                var bindableObj = el as BindableObject;
+                if (bindableObj != null)
+                {
+                    var bpFields = GetBindablePropertyFields(elType);
+                    foreach (var (fieldName, bp) in bpFields)
+                    {
+                        if (!seen.Add(bp.PropertyName)) continue;
+
+                        var clrProp = elType.GetProperty(bp.PropertyName, BindingFlags.Public | BindingFlags.Instance);
+                        bool isReadOnly = bp.IsReadOnly || clrProp?.CanWrite != true;
+
+                        string? formattedValue;
+                        try { formattedValue = FormatPropertyValue(bindableObj.GetValue(bp)); }
+                        catch (Exception ex) { formattedValue = $"<error: {ex.Message}>"; }
+
+                        properties.Add(new PropertyDetail
+                        {
+                            Name = bp.PropertyName,
+                            Value = formattedValue,
+                            TypeName = bp.ReturnType?.Name ?? "Unknown",
+                            Category = "bindable",
+                            IsReadOnly = isReadOnly,
+                        });
+                    }
+                }
+            }
+
+            // 2. Interface properties
+            if (categoryFilter == null || categoryFilter.Equals("interface", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var iface in interfaces)
+                {
+                    if (interfaceFilter != null &&
+                        !iface.Name.Equals(interfaceFilter, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    foreach (var iProp in iface.GetProperties())
+                    {
+                        if (!seen.Add(iProp.Name)) continue;
+
+                        string? formattedValue;
+                        try
+                        {
+                            var concreteProp = elType.GetProperty(iProp.Name, BindingFlags.Public | BindingFlags.Instance)
+                                ?? elType.GetProperty(iProp.Name, BindingFlags.NonPublic | BindingFlags.Instance);
+                            var val = concreteProp?.GetValue(el);
+                            formattedValue = FormatPropertyValue(val);
+                        }
+                        catch (Exception ex) { formattedValue = $"<error: {ex.Message}>"; }
+
+                        properties.Add(new PropertyDetail
+                        {
+                            Name = iProp.Name,
+                            Value = formattedValue,
+                            TypeName = iProp.PropertyType.Name,
+                            Category = "interface",
+                            InterfaceName = iface.Name,
+                            IsReadOnly = !iProp.CanWrite,
+                        });
+                    }
+                }
+            }
+
+            // 3. Remaining CLR properties
+            if (categoryFilter == null || categoryFilter.Equals("clr", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var prop in elType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+                {
+                    if (!seen.Add(prop.Name)) continue;
+                    // Skip indexers
+                    if (prop.GetIndexParameters().Length > 0) continue;
+
+                    string? formattedValue;
+                    try { formattedValue = FormatPropertyValue(prop.GetValue(el)); }
+                    catch (Exception ex) { formattedValue = $"<error: {ex.Message}>"; }
+
+                    properties.Add(new PropertyDetail
+                    {
+                        Name = prop.Name,
+                        Value = formattedValue,
+                        TypeName = prop.PropertyType.Name,
+                        Category = "clr",
+                        IsReadOnly = !prop.CanWrite,
+                    });
+                }
+            }
+
+            response.Properties = properties;
+            return response;
+        });
+
+        return result != null
+            ? HttpResponse.Json(result)
+            : HttpResponse.NotFound($"Element '{id}' not found");
+    }
+
+    private static List<(string FieldName, BindableProperty Property)> GetBindablePropertyFields(Type type)
+    {
+        var results = new List<(string, BindableProperty)>();
+        var seen = new HashSet<string>();
+
+        // Walk the type hierarchy to collect all BindableProperty fields
+        var current = type;
+        while (current != null && current != typeof(object))
+        {
+            foreach (var field in current.GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy))
+            {
+                if (field.FieldType == typeof(BindableProperty) || field.FieldType == typeof(BindablePropertyKey))
+                {
+                    var bp = field.GetValue(null) as BindableProperty;
+                    if (bp == null && field.GetValue(null) is BindablePropertyKey bpk)
+                        bp = bpk.BindableProperty;
+                    if (bp != null && seen.Add(bp.PropertyName))
+                        results.Add((field.Name, bp));
+                }
+            }
+            current = current.BaseType;
+        }
+
+        return results.OrderBy(r => r.Item2.PropertyName).ToList();
     }
 
     private static string? FormatPropertyValue(object? value)

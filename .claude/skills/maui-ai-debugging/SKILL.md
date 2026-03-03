@@ -158,7 +158,8 @@ if the build fails.
 3. `maui-devflow MAUI query --automationId "MyButton"` — find specific elements
 4. `maui-devflow MAUI element <id>` — get full details (type, bounds, visibility, children)
 5. `maui-devflow MAUI property <id> Text` — read any property by name
-6. `maui-devflow MAUI screenshot --output screen.png` — visual verification
+6. `maui-devflow MAUI properties <id>` — discover all properties (bindable, interface, CLR)
+7. `maui-devflow MAUI screenshot --output screen.png` — visual verification
 7. `maui-devflow MAUI screenshot --id <elementId> --output el.png` — element-only screenshot
 8. `maui-devflow MAUI screenshot --selector "Button" --output btn.png` — screenshot by CSS selector
 
@@ -166,6 +167,14 @@ if the build fails.
 ```bash
 maui-devflow MAUI property <id> BackgroundColor    # verify dark mode colors
 maui-devflow MAUI property <id> IsVisible          # check element visibility
+```
+
+**Property discovery** — list all available properties on an element:
+```bash
+maui-devflow MAUI properties <id>                  # all properties grouped by category
+maui-devflow MAUI properties <id> --category bindable  # only BindableProperties
+maui-devflow MAUI properties <id> --interface ITextStyle # properties from a specific interface
+maui-devflow MAUI properties <id> --json           # raw JSON for programmatic use
 ```
 
 **Live editing (no rebuild needed):**
@@ -255,6 +264,7 @@ or `maui-devflow --agent-port 10224 MAUI status` — both are valid.
 | `MAUI clear <elementId>` | Clear text from element |
 | `MAUI screenshot [--output path.png] [--window W] [--id ID] [--selector SEL]` | PNG screenshot. Capture full window or a specific element by ID/selector. Window is 0-based index; default first window |
 | `MAUI property <elementId> <prop>` | Read property (Text, IsVisible, FontSize, etc.) |
+| `MAUI properties <elementId> [--category C] [--interface I] [--json]` | Discover all properties on an element. Categories: bindable, interface, clr. Filter by interface name |
 | `MAUI set-property <elementId> <prop> <value>` | Set property (live editing — colors, text, sizes, etc.) |
 | `MAUI element <elementId>` | Full element JSON (type, bounds, children, etc.) |
 | `MAUI navigate <route>` | Shell navigation (e.g. `//native`, `//blazor`) |

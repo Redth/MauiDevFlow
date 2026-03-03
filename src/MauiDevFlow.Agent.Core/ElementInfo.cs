@@ -65,6 +65,52 @@ public class ElementInfo
 }
 
 /// <summary>
+/// Response for the property discovery endpoint — lists all properties on an element.
+/// </summary>
+public class PropertiesResponse
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = string.Empty;
+
+    [JsonPropertyName("type")]
+    public string Type { get; set; } = string.Empty;
+
+    [JsonPropertyName("fullType")]
+    public string FullType { get; set; } = string.Empty;
+
+    [JsonPropertyName("interfaces")]
+    public List<string> Interfaces { get; set; } = new();
+
+    [JsonPropertyName("properties")]
+    public List<PropertyDetail> Properties { get; set; } = new();
+}
+
+/// <summary>
+/// A single property discovered on an element.
+/// </summary>
+public class PropertyDetail
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("value")]
+    public string? Value { get; set; }
+
+    [JsonPropertyName("typeName")]
+    public string TypeName { get; set; } = string.Empty;
+
+    [JsonPropertyName("category")]
+    public string Category { get; set; } = string.Empty; // "bindable", "interface", "clr"
+
+    [JsonPropertyName("interfaceName")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? InterfaceName { get; set; }
+
+    [JsonPropertyName("isReadOnly")]
+    public bool IsReadOnly { get; set; }
+}
+
+/// <summary>
 /// Element bounding rectangle in screen coordinates.
 /// </summary>
 public class BoundsInfo

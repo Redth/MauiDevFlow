@@ -229,6 +229,15 @@ class Program
         mauiSetPropertyCmd.SetHandler(async (host, port, id, name, value) => await MauiSetPropertyAsync(host, port, id, name, value), agentHostOption, agentPortOption, setPropIdArg, setPropNameArg, setPropValueArg);
         mauiCommand.Add(mauiSetPropertyCmd);
 
+        // MAUI properties (discover all properties on an element)
+        var propsIdArg = new Argument<string>("elementId", "Element ID");
+        var propsCategoryOpt = new Option<string?>("--category", "Filter by category: bindable, interface, clr");
+        var propsInterfaceOpt = new Option<string?>("--interface", "Filter to specific interface (e.g. ITextStyle)");
+        var propsJsonOpt = new Option<bool>("--json", "Output raw JSON");
+        var mauiPropertiesCmd = new Command("properties", "List all properties on an element") { propsIdArg, propsCategoryOpt, propsInterfaceOpt, propsJsonOpt };
+        mauiPropertiesCmd.SetHandler(async (host, port, id, category, iface, json) => await MauiPropertiesAsync(host, port, id, category, iface, json), agentHostOption, agentPortOption, propsIdArg, propsCategoryOpt, propsInterfaceOpt, propsJsonOpt);
+        mauiCommand.Add(mauiPropertiesCmd);
+
         // MAUI element
         var elementIdArg = new Argument<string>("elementId", "Element ID");
         var mauiElementCmd = new Command("element", "Get element details") { elementIdArg };
@@ -1169,6 +1178,97 @@ class Program
                 Console.WriteLine($"Set {propertyName} = {value}");
             else
                 WriteError($"Failed: {body}");
+        }
+        catch (Exception ex) { WriteError(ex.Message); }
+    }
+
+    private static async Task MauiPropertiesAsync(string host, int port, string elementId, string? category, string? interfaceName, bool jsonOutput)
+    {
+        try
+        {
+            using var client = new MauiDevFlow.Driver.AgentClient(host, port);
+            var result = await client.GetPropertiesAsync(elementId, category, interfaceName);
+
+            if (result.ValueKind != System.Text.Json.JsonValueKind.Object)
+            {
+                WriteError($"Element '{elementId}' not found");
+                return;
+            }
+
+            if (jsonOutput)
+            {
+                Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+                return;
+            }
+
+            // Header
+            if (result.TryGetProperty("type", out var typeProp))
+                Console.WriteLine($"Type: {typeProp.GetString()}");
+            if (result.TryGetProperty("fullType", out var fullTypeProp))
+                Console.WriteLine($"Full Type: {fullTypeProp.GetString()}");
+            if (result.TryGetProperty("interfaces", out var ifacesProp) && ifacesProp.ValueKind == JsonValueKind.Array)
+            {
+                var ifaces = ifacesProp.EnumerateArray().Select(i => i.GetString()).Where(s => s != null).ToList();
+                if (ifaces.Count > 0)
+                    Console.WriteLine($"Interfaces: {string.Join(", ", ifaces)}");
+            }
+            Console.WriteLine();
+
+            if (!result.TryGetProperty("properties", out var propsProp) || propsProp.ValueKind != JsonValueKind.Array)
+                return;
+
+            // Group by category
+            var properties = propsProp.EnumerateArray().ToList();
+            var grouped = properties
+                .GroupBy(p => p.TryGetProperty("category", out var c) ? c.GetString() ?? "clr" : "clr")
+                .OrderBy(g => g.Key switch { "bindable" => 0, "interface" => 1, _ => 2 });
+
+            foreach (var group in grouped)
+            {
+                var categoryLabel = group.Key switch
+                {
+                    "bindable" => "Bindable Properties",
+                    "interface" => "Interface Properties",
+                    "clr" => "CLR Properties",
+                    _ => group.Key
+                };
+                Console.WriteLine($"── {categoryLabel} ({group.Count()}) ──");
+
+                // Calculate column widths
+                var items = group.ToList();
+                int nameWidth = Math.Max(8, items.Max(p => (p.TryGetProperty("name", out var n) ? n.GetString()?.Length : 0) ?? 0));
+                int typeWidth = Math.Max(6, items.Max(p => (p.TryGetProperty("typeName", out var t) ? t.GetString()?.Length : 0) ?? 0));
+                nameWidth = Math.Min(nameWidth, 35);
+                typeWidth = Math.Min(typeWidth, 25);
+
+                Console.WriteLine($"  {"Name".PadRight(nameWidth)}  {"Type".PadRight(typeWidth)}  {"RO".PadRight(3)}  Value");
+                Console.WriteLine($"  {new string('─', nameWidth)}  {new string('─', typeWidth)}  {"───"}  {new string('─', 40)}");
+
+                string? lastIface = null;
+                foreach (var prop in items)
+                {
+                    var name = prop.TryGetProperty("name", out var pn) ? pn.GetString() ?? "" : "";
+                    var typeName = prop.TryGetProperty("typeName", out var pt) ? pt.GetString() ?? "" : "";
+                    var val = prop.TryGetProperty("value", out var pv) ? pv.GetString() ?? "(null)" : "(null)";
+                    var isReadOnly = prop.TryGetProperty("isReadOnly", out var pr) && pr.GetBoolean();
+                    var iface = prop.TryGetProperty("interfaceName", out var pi) ? pi.GetString() : null;
+
+                    // Sub-header for interface grouping
+                    if (group.Key == "interface" && iface != lastIface)
+                    {
+                        Console.WriteLine($"  [{iface}]");
+                        lastIface = iface;
+                    }
+
+                    // Truncate long values
+                    if (val.Length > 60) val = val[..57] + "...";
+
+                    Console.WriteLine($"  {name.PadRight(nameWidth)}  {typeName.PadRight(typeWidth)}  {(isReadOnly ? " ✓ " : "   ")}  {val}");
+                }
+                Console.WriteLine();
+            }
+
+            Console.WriteLine($"Total: {properties.Count} properties");
         }
         catch (Exception ex) { WriteError(ex.Message); }
     }

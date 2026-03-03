@@ -177,6 +177,18 @@ public class AgentClient : IDisposable
         return null;
     }
 
+    /// <summary>
+    /// Get all discoverable properties for an element.
+    /// </summary>
+    public async Task<JsonElement> GetPropertiesAsync(string elementId, string? category = null, string? interfaceName = null)
+    {
+        var query = new List<string>();
+        if (category != null) query.Add($"category={Uri.EscapeDataString(category)}");
+        if (interfaceName != null) query.Add($"interface={Uri.EscapeDataString(interfaceName)}");
+        var qs = query.Count > 0 ? "?" + string.Join("&", query) : "";
+        return await GetJsonAsync($"/api/properties/{elementId}{qs}");
+    }
+
     private async Task<T?> GetAsync<T>(string path) where T : class
     {
         try
