@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:SampleMauiApp"
+             x:Class="SampleMauiApp.MultiBlazorPage"
+             Title="Multi-Blazor">
+    <ContentPage.BackgroundColor>
+        <AppThemeBinding Light="#F5F5F5" Dark="#1C1B1F" />
+    </ContentPage.BackgroundColor>
+
+    <Grid ColumnDefinitions="*,*" ColumnSpacing="4" Padding="4">
+
+        <BlazorWebView x:Name="blazorWebView1"
+                       Grid.Column="0"
+                       HostPage="wwwroot/index.html"
+                       AutomationId="BlazorLeft">
+            <BlazorWebView.RootComponents>
+                <RootComponent Selector="#app" ComponentType="{x:Type local:Components.Routes}" />
+            </BlazorWebView.RootComponents>
+        </BlazorWebView>
+
+        <BlazorWebView x:Name="blazorWebView2"
+                       Grid.Column="1"
+                       HostPage="wwwroot/index.html"
+                       AutomationId="BlazorRight">
+            <BlazorWebView.RootComponents>
+                <RootComponent Selector="#app" ComponentType="{x:Type local:Components.Routes}" />
+            </BlazorWebView.RootComponents>
+        </BlazorWebView>
+
+    </Grid>
+
+</ContentPage>

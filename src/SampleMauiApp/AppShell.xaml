@@ -9,6 +9,8 @@
                   ContentTemplate="{DataTemplate local:MainPage}" />
     <ShellContent Title="Blazor" Route="blazor"
                   ContentTemplate="{DataTemplate local:BlazorTodoPage}" />
+    <ShellContent Title="Multi-Blazor" Route="multiblazor"
+                  ContentTemplate="{DataTemplate local:MultiBlazorPage}" />
     <ShellContent Title="Interactions" Route="interactions"
                   ContentTemplate="{DataTemplate local:InteractionTestPage}" />
     <ShellContent Title="Dialogs" Route="dialogs"

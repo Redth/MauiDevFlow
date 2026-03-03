@@ -1,0 +1,16 @@
+@page "/info"
+
+<h1>ℹ️ App Info</h1>
+
+<div class="info-card">
+    <p><strong>App:</strong> SampleMauiApp</p>
+    <p><strong>Framework:</strong> .NET MAUI Blazor Hybrid</p>
+    <p><strong>WebView:</strong> Secondary</p>
+    <p><strong>Time:</strong> @DateTime.Now.ToString("HH:mm:ss")</p>
+</div>
+
+<button class="btn btn-primary" @onclick="Refresh">Refresh</button>
+
+@code {
+    private void Refresh() => StateHasChanged();
+}
