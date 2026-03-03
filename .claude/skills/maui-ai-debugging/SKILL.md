@@ -188,6 +188,18 @@ until the app restarts — safe for experimentation.
 3. `maui-devflow cdp Input dispatchClickEvent "css-selector"` — click elements
 4. `maui-devflow cdp Runtime evaluate "js-expression"` — run JS
 
+**Multiple BlazorWebViews:** If the app has more than one `BlazorWebView`, each is
+registered independently with its `AutomationId`. Use `cdp webviews` to list them,
+then target a specific one with `--webview` (or `-w`):
+
+```bash
+maui-devflow cdp webviews                                  # list all WebViews
+maui-devflow cdp -w BlazorLeft snapshot                    # snapshot of a specific WebView
+maui-devflow cdp -w 1 Runtime evaluate "document.title"    # target by index
+```
+
+Without `--webview`, commands target the first (index 0) WebView.
+
 **Live CSS/DOM editing in Blazor (no rebuild needed):**
 ```bash
 maui-devflow cdp Runtime evaluate "document.querySelector('h1').style.color = 'tomato'"

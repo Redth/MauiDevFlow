@@ -18,7 +18,7 @@ manually check the simulator.
 ## Features
 
 - **Native MAUI Automation** — Visual tree inspection, element interaction (tap, fill, clear), screenshots via in-app Agent
-- **Blazor WebView Debugging** — CDP bridge using Chobitsu for JavaScript evaluation, DOM manipulation, page navigation
+- **Blazor WebView Debugging** — CDP bridge using Chobitsu for JavaScript evaluation, DOM manipulation, page navigation. Supports multiple BlazorWebViews per app with independent targeting
 - **Unified Logging** — Native `ILogger` and WebView `console.log/warn/error` unified into a single log stream with source filtering
 - **Broker Daemon** — Automatic port assignment and agent discovery for simultaneous multi-app debugging
 - **CLI Tool** (`maui-devflow`) — Scriptable commands for both native and Blazor automation
@@ -176,8 +176,12 @@ maui-devflow cdp snapshot
 For Blazor Hybrid apps with the CDP bridge configured:
 
 ```bash
-# Check CDP connection
+# Check CDP connection and WebView count
 maui-devflow cdp status
+
+# List all registered WebViews (useful when app has multiple BlazorWebViews)
+maui-devflow cdp webviews
+maui-devflow cdp webviews --json
 
 # Page snapshot (useful for AI agents — accessible text representation of DOM)
 maui-devflow cdp snapshot
@@ -206,6 +210,27 @@ maui-devflow cdp Runtime evaluate "document.querySelectorAll('.item').forEach(el
 maui-devflow cdp Runtime evaluate "document.documentElement.style.setProperty('--bg-color', '#1a1a2e')"
 maui-devflow cdp Runtime evaluate "document.head.insertAdjacentHTML('beforeend', '<style>.btn { background: hotpink !important; }</style>')"
 ```
+
+### Multi-WebView Targeting
+
+Apps with multiple `BlazorWebView` controls (e.g. side-by-side views, split layouts) are
+fully supported. Each WebView registers independently with the agent using its `AutomationId`.
+
+```bash
+# List all WebViews — shows index, AutomationId, and ready status
+maui-devflow cdp webviews
+
+# Target a specific WebView by AutomationId
+maui-devflow cdp --webview BlazorLeft snapshot
+maui-devflow cdp -w BlazorRight Runtime evaluate "document.title"
+
+# Target by index (0-based)
+maui-devflow cdp -w 0 Runtime evaluate "1+1"
+maui-devflow cdp -w 1 DOM querySelector "h1"
+```
+
+Without `--webview`, all CDP commands target the first registered WebView (index 0).
+The `--webview` (`-w`) option is available on every `cdp` subcommand.
 
 > **Tip:** Live CSS/DOM edits are immediate and non-destructive — changes are lost on page reload,
 > making them safe for experimentation before committing to code.
@@ -236,7 +261,8 @@ auto-assigned by the broker (range 10223–10899), or configurable via `.mauidev
 | `/api/property/{id}/{name}` | GET | Get property value |
 | `/api/property/{id}/{name}` | POST | Set property `{"value":"..."}` |
 | `/api/logs?limit=N&skip=N&source=S` | GET | Application logs (source: `native`, `webview`, or omit for all) |
-| `/api/cdp` | POST | Forward CDP command to Blazor WebView |
+| `/api/cdp` | POST | Forward CDP command to Blazor WebView. Use `?webview=<id>` to target a specific WebView |
+| `/api/cdp/webviews` | GET | List registered CDP WebViews (index, AutomationId, elementId, ready status) |
 
 ## Project Structure
 
@@ -270,6 +296,7 @@ Hybrid page, connected via Shell navigation (`//native` and `//blazor` routes). 
 - **Shell navigation** — switch between tabs via `maui-devflow MAUI navigate "//native"` etc.
 - **Dark mode support** — both native (AppThemeBinding) and Blazor (`@media prefers-color-scheme`) adapt to system theme
 - **Description field** — todo items support title + optional description on both pages
+- **Multi-WebView** — the `//multiblazor` route shows two side-by-side BlazorWebViews (`BlazorLeft` and `BlazorRight`) for testing multi-WebView CDP targeting
 
 ## Platform Support
 
