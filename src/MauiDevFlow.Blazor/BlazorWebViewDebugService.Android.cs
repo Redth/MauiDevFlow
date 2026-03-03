@@ -12,65 +12,7 @@ namespace MauiDevFlow.Blazor;
 /// </summary>
 public class BlazorWebViewDebugService : BlazorWebViewDebugServiceBase
 {
-    private AWebView? _webView;
-
     public BlazorWebViewDebugService() { }
-
-    protected override bool HasWebView => _webView != null;
-
-    protected override Task<string?> EvaluateJavaScriptAsync(string script)
-    {
-        var tcs = new TaskCompletionSource<string?>();
-
-        MainThread.BeginInvokeOnMainThread(() =>
-        {
-            try
-            {
-                if (_webView == null)
-                {
-                    tcs.TrySetResult(null);
-                    return;
-                }
-
-                _webView.EvaluateJavascript(script, new JsValueCallback(value =>
-                {
-                    // Android returns "null" string for null/undefined JS results
-                    if (value == "null" || value == null)
-                        tcs.TrySetResult(null);
-                    else
-                    {
-                        // Android returns JS values as JSON-encoded strings.
-                        // For string results: "\"hello\"" -> need to JSON-deserialize to get "hello"
-                        // For non-string results: "42", "[1,2]" -> just strip outer quotes if present
-                        if (value.StartsWith("\"") && value.EndsWith("\""))
-                        {
-                            try
-                            {
-                                value = System.Text.Json.JsonSerializer.Deserialize<string>(value) ?? value;
-                            }
-                            catch
-                            {
-                                value = value[1..^1];
-                            }
-                        }
-                        tcs.TrySetResult(value);
-                    }
-                }));
-            }
-            catch (Exception ex)
-            {
-                tcs.TrySetException(ex);
-            }
-        });
-
-        return tcs.Task;
-    }
-
-    protected override void ReloadWebView()
-        => MainThread.BeginInvokeOnMainThread(() => _webView?.Reload());
-
-    protected override void NavigateWebView(string url)
-        => MainThread.BeginInvokeOnMainThread(() => _webView?.LoadUrl(url));
 
     public override void ConfigureHandler()
     {
@@ -82,10 +24,40 @@ public class BlazorWebViewDebugService : BlazorWebViewDebugServiceBase
 
             if (handler.PlatformView is AWebView androidWebView)
             {
-                _webView = androidWebView;
-                _webView.Settings.JavaScriptEnabled = true;
-                Log("[BlazorDevFlow] Android WebView captured successfully");
-                await OnWebViewCapturedAsync();
+                androidWebView.Settings.JavaScriptEnabled = true;
+                var automationId = (handler.VirtualView as VisualElement)?.AutomationId;
+                var idx = AddWebViewBridge(
+                    (script) =>
+                    {
+                        var tcs = new TaskCompletionSource<string?>();
+                        MainThread.BeginInvokeOnMainThread(() =>
+                        {
+                            try
+                            {
+                                androidWebView.EvaluateJavascript(script, new JsValueCallback(value =>
+                                {
+                                    if (value == "null" || value == null)
+                                        tcs.TrySetResult(null);
+                                    else
+                                    {
+                                        if (value.StartsWith("\"") && value.EndsWith("\""))
+                                        {
+                                            try { value = System.Text.Json.JsonSerializer.Deserialize<string>(value) ?? value; }
+                                            catch { value = value[1..^1]; }
+                                        }
+                                        tcs.TrySetResult(value);
+                                    }
+                                }));
+                            }
+                            catch (Exception ex) { tcs.TrySetException(ex); }
+                        });
+                        return tcs.Task;
+                    },
+                    () => MainThread.BeginInvokeOnMainThread(() => androidWebView.Reload()),
+                    (url) => MainThread.BeginInvokeOnMainThread(() => androidWebView.LoadUrl(url)),
+                    automationId);
+                Log($"[BlazorDevFlow] Android WebView captured as bridge {idx} (automationId={automationId})");
+                await InitializeBridgeAsync(idx);
             }
             else
             {

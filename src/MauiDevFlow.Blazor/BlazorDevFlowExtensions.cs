@@ -185,20 +185,72 @@ public static class BlazorDevFlowExtensions
                     return;
                 }
 
-                // Set CdpCommandHandler = blazorService.SendCdpCommandAsync
-                var handlerProp = agentType.GetProperty("CdpCommandHandler");
-                var readyProp = agentType.GetProperty("CdpReadyCheck");
+                // Register each WebView bridge with the agent as they appear
+                var registerMethod = agentType.GetMethod("RegisterCdpWebView");
+                var updateMethod = agentType.GetMethod("UpdateCdpWebView");
 
-                if (handlerProp != null)
+                if (registerMethod != null)
                 {
-                    var handler2 = new Func<string, Task<string>>(blazorService.SendCdpCommandAsync);
-                    handlerProp.SetValue(agentService, handler2);
+                    // Register existing bridges (if any were created before wiring)
+                    foreach (var bridge in blazorService.Bridges)
+                    {
+                        var bridgeRef = bridge; // capture for closure
+                        registerMethod.Invoke(agentService, new object?[]
+                        {
+                            new Func<string, Task<string>>(bridgeRef.SendCdpCommandAsync),
+                            new Func<bool>(() => bridgeRef.IsReady),
+                            bridgeRef.AutomationId,
+                            bridgeRef.ElementId,
+                            null // url
+                        });
+                    }
+
+                    // Watch for new bridges via polling (bridges added when WebViews appear)
+                    var registeredCount = blazorService.Bridges.Count;
+                    _ = Task.Run(async () =>
+                    {
+                        // Poll for new bridges for up to 10 minutes
+                        for (int i = 0; i < 600; i++)
+                        {
+                            await Task.Delay(1000);
+                            while (registeredCount < blazorService.Bridges.Count)
+                            {
+                                var bridge = blazorService.Bridges[registeredCount];
+                                try
+                                {
+                                    registerMethod.Invoke(agentService, new object?[]
+                                    {
+                                        new Func<string, Task<string>>(bridge.SendCdpCommandAsync),
+                                        new Func<bool>(() => bridge.IsReady),
+                                        bridge.AutomationId,
+                                        bridge.ElementId,
+                                        null
+                                    });
+                                    System.Diagnostics.Debug.WriteLine($"[MauiDevFlow] Registered CDP WebView bridge {registeredCount}");
+                                }
+                                catch { }
+                                registeredCount++;
+                            }
+                        }
+                    });
                 }
-
-                if (readyProp != null)
+                else
                 {
-                    var readyCheck = new Func<bool>(() => blazorService.IsReady);
-                    readyProp.SetValue(agentService, readyCheck);
+                    // Fallback: legacy single-delegate wiring
+                    var handlerProp = agentType.GetProperty("CdpCommandHandler");
+                    var readyProp = agentType.GetProperty("CdpReadyCheck");
+
+                    if (handlerProp != null)
+                    {
+                        var handler2 = new Func<string, Task<string>>(blazorService.SendCdpCommandAsync);
+                        handlerProp.SetValue(agentService, handler2);
+                    }
+
+                    if (readyProp != null)
+                    {
+                        var readyCheck = new Func<bool>(() => blazorService.IsReady);
+                        readyProp.SetValue(agentService, readyCheck);
+                    }
                 }
 
                 // Wire WebViewLogCallback → Agent.WriteWebViewLog

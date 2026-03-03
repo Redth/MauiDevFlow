@@ -26,11 +26,99 @@ public class DevFlowAgentService : IDisposable
     /// <summary>
     /// Delegate for sending CDP commands to the Blazor WebView.
     /// Set by the Blazor package when both are registered.
+    /// Deprecated: use RegisterCdpWebView() for multi-WebView support.
+    /// Setting this property registers the handler as WebView index 0.
     /// </summary>
-    public Func<string, Task<string>>? CdpCommandHandler { get; set; }
+    public Func<string, Task<string>>? CdpCommandHandler
+    {
+        get => _cdpWebViews.Count > 0 ? _cdpWebViews[0].CommandHandler : null;
+        set
+        {
+            if (value == null)
+            {
+                if (_cdpWebViews.Count > 0)
+                    _cdpWebViews.RemoveAt(0);
+                return;
+            }
+            if (_cdpWebViews.Count > 0)
+                _cdpWebViews[0].CommandHandler = value;
+            else
+                _cdpWebViews.Add(new CdpWebViewInfo { Index = 0, CommandHandler = value, ReadyCheck = () => true });
+        }
+    }
 
-    /// <summary>Whether the CDP handler is ready to process commands.</summary>
-    public Func<bool>? CdpReadyCheck { get; set; }
+    /// <summary>Whether the CDP handler is ready to process commands.
+    /// Deprecated: use RegisterCdpWebView() for multi-WebView support.</summary>
+    public Func<bool>? CdpReadyCheck
+    {
+        get => _cdpWebViews.Count > 0 ? _cdpWebViews[0].ReadyCheck : null;
+        set
+        {
+            if (_cdpWebViews.Count > 0 && value != null)
+                _cdpWebViews[0].ReadyCheck = value;
+        }
+    }
+
+    private readonly List<CdpWebViewInfo> _cdpWebViews = new();
+    private int _nextWebViewIndex = 0;
+
+    /// <summary>Register a CDP-capable WebView with the agent.</summary>
+    public int RegisterCdpWebView(Func<string, Task<string>> commandHandler, Func<bool> readyCheck,
+        string? automationId = null, string? elementId = null, string? url = null)
+    {
+        var index = _nextWebViewIndex++;
+        _cdpWebViews.Add(new CdpWebViewInfo
+        {
+            Index = index,
+            AutomationId = automationId,
+            ElementId = elementId,
+            Url = url,
+            CommandHandler = commandHandler,
+            ReadyCheck = readyCheck,
+        });
+        return index;
+    }
+
+    /// <summary>Unregister a CDP WebView by index.</summary>
+    public void UnregisterCdpWebView(int index)
+    {
+        _cdpWebViews.RemoveAll(w => w.Index == index);
+    }
+
+    /// <summary>Update metadata for a registered WebView.</summary>
+    public void UpdateCdpWebView(int index, string? automationId = null, string? elementId = null, string? url = null)
+    {
+        var wv = _cdpWebViews.FirstOrDefault(w => w.Index == index);
+        if (wv == null) return;
+        if (automationId != null) wv.AutomationId = automationId;
+        if (elementId != null) wv.ElementId = elementId;
+        if (url != null) wv.Url = url;
+    }
+
+    private CdpWebViewInfo? ResolveCdpWebView(string? webviewId)
+    {
+        if (_cdpWebViews.Count == 0) return null;
+        if (string.IsNullOrEmpty(webviewId)) return _cdpWebViews[0]; // default to first
+
+        // Try index
+        if (int.TryParse(webviewId, out var idx))
+        {
+            var byIndex = _cdpWebViews.FirstOrDefault(w => w.Index == idx);
+            if (byIndex != null) return byIndex;
+        }
+
+        // Try AutomationId
+        var byAutomationId = _cdpWebViews.FirstOrDefault(w =>
+            !string.IsNullOrEmpty(w.AutomationId) && w.AutomationId.Equals(webviewId, StringComparison.OrdinalIgnoreCase));
+        if (byAutomationId != null) return byAutomationId;
+
+        // Try ElementId
+        var byElementId = _cdpWebViews.FirstOrDefault(w =>
+            !string.IsNullOrEmpty(w.ElementId) && w.ElementId.Equals(webviewId, StringComparison.OrdinalIgnoreCase));
+        if (byElementId != null) return byElementId;
+
+        return null;
+    }
 
     public bool IsRunning => _server.IsRunning;
     public int Port => _options.Port;
@@ -154,6 +242,7 @@ public class DevFlowAgentService : IDisposable
         _server.MapPost("/api/action/scroll", HandleScroll);
         _server.MapGet("/api/logs", HandleLogs);
         _server.MapPost("/api/cdp", HandleCdp);
+        _server.MapGet("/api/cdp/webviews", HandleCdpWebViews);
     }
 
     private async Task<HttpResponse> HandleStatus(HttpRequest request)
@@ -182,7 +271,8 @@ public class DevFlowAgentService : IDisposable
                 idiom = IdiomName,
                 appName = _app?.GetType().Assembly.GetName().Name ?? "unknown",
                 running = _app != null,
-                cdpReady = CdpReadyCheck?.Invoke() ?? false,
+                cdpReady = _cdpWebViews.Any(w => w.IsReady),
+                cdpWebViewCount = _cdpWebViews.Count,
                 windowCount = _app?.Windows.Count ?? 0,
                 windowWidth = double.IsFinite(w) ? w : 0,
                 windowHeight = double.IsFinite(h) ? h : 0
@@ -1066,18 +1156,24 @@ public class DevFlowAgentService : IDisposable
 
     private async Task<HttpResponse> HandleCdp(HttpRequest request)
     {
-        if (CdpCommandHandler == null)
-            return HttpResponse.Error("CDP not available (Blazor debug service not registered)");
+        if (_cdpWebViews.Count == 0)
+            return HttpResponse.Error("CDP not available (no Blazor WebViews registered)");
 
-        if (!(CdpReadyCheck?.Invoke() ?? false))
-            return HttpResponse.Error("CDP not ready (WebView not initialized)");
+        request.QueryParams.TryGetValue("webview", out var webviewId);
+        var webView = ResolveCdpWebView(webviewId);
+
+        if (webView == null)
+            return HttpResponse.Error($"WebView '{webviewId}' not found. Use GET /api/cdp/webviews to list available WebViews.");
+
+        if (!webView.IsReady)
+            return HttpResponse.Error($"CDP not ready on WebView {webView.Index} (WebView not initialized)");
 
         if (string.IsNullOrEmpty(request.Body))
             return HttpResponse.Error("Missing CDP command body");
 
         try
         {
-            var result = await CdpCommandHandler(request.Body);
+            var result = await webView.CommandHandler(request.Body);
             return new HttpResponse
             {
                 ContentType = "application/json",
@@ -1088,6 +1184,20 @@ public class DevFlowAgentService : IDisposable
         {
             return HttpResponse.Error($"CDP command failed: {ex.Message}");
         }
+    }
+
+    private Task<HttpResponse> HandleCdpWebViews(HttpRequest request)
+    {
+        var webviews = _cdpWebViews.Select(w => new
+        {
+            index = w.Index,
+            automationId = w.AutomationId,
+            elementId = w.ElementId,
+            url = w.Url,
+            isReady = w.IsReady,
+        }).ToList();
+
+        return Task.FromResult(HttpResponse.Json(new { webviews }));
     }
 }
 

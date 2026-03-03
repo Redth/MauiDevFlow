@@ -81,3 +81,33 @@ public class BoundsInfo
     [JsonPropertyName("height")]
     public double Height { get; set; }
 }
+
+/// <summary>
+/// Metadata for a registered CDP-capable WebView.
+/// </summary>
+public class CdpWebViewInfo
+{
+    [JsonPropertyName("index")]
+    public int Index { get; set; }
+
+    [JsonPropertyName("automationId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? AutomationId { get; set; }
+
+    [JsonPropertyName("elementId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ElementId { get; set; }
+
+    [JsonPropertyName("url")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Url { get; set; }
+
+    [JsonPropertyName("isReady")]
+    public bool IsReady => ReadyCheck?.Invoke() ?? false;
+
+    [JsonIgnore]
+    public Func<string, Task<string>> CommandHandler { get; set; } = null!;
+
+    [JsonIgnore]
+    public Func<bool> ReadyCheck { get; set; } = () => false;
+}

@@ -177,6 +177,14 @@ public class AgentClient : IDisposable
         return null;
     }
 
+    /// <summary>
+    /// Gets the list of CDP WebViews registered with the agent.
+    /// </summary>
+    public async Task<JsonElement> GetCdpWebViewsAsync()
+    {
+        return await GetJsonAsync("/api/cdp/webviews");
+    }
+
     private async Task<T?> GetAsync<T>(string path) where T : class
     {
         try

@@ -76,15 +76,65 @@ public static class GtkBlazorDevFlowExtensions
                 return;
             }
 
-            // Wire CdpCommandHandler and CdpReadyCheck
-            var handlerProp = agentType.GetProperty("CdpCommandHandler");
-            var readyProp = agentType.GetProperty("CdpReadyCheck");
+            // Wire CdpCommandHandler and CdpReadyCheck — use RegisterCdpWebView if available
+            var registerMethod = agentType.GetMethod("RegisterCdpWebView");
 
-            if (handlerProp != null)
-                handlerProp.SetValue(agentService, new Func<string, Task<string>>(blazorService.SendCdpCommandAsync));
+            if (registerMethod != null)
+            {
+                // Register existing bridges
+                foreach (var bridge in blazorService.Bridges)
+                {
+                    var bridgeRef = bridge;
+                    registerMethod.Invoke(agentService, new object?[]
+                    {
+                        new Func<string, Task<string>>(bridgeRef.SendCdpCommandAsync),
+                        new Func<bool>(() => bridgeRef.IsReady),
+                        bridgeRef.AutomationId,
+                        bridgeRef.ElementId,
+                        null // url
+                    });
+                }
 
-            if (readyProp != null)
-                readyProp.SetValue(agentService, new Func<bool>(() => blazorService.IsReady));
+                // Watch for new bridges
+                var registeredCount = blazorService.Bridges.Count;
+                _ = Task.Run(async () =>
+                {
+                    for (int i = 0; i < 600; i++)
+                    {
+                        await Task.Delay(1000);
+                        while (registeredCount < blazorService.Bridges.Count)
+                        {
+                            var bridge = blazorService.Bridges[registeredCount];
+                            try
+                            {
+                                registerMethod.Invoke(agentService, new object?[]
+                                {
+                                    new Func<string, Task<string>>(bridge.SendCdpCommandAsync),
+                                    new Func<bool>(() => bridge.IsReady),
+                                    bridge.AutomationId,
+                                    bridge.ElementId,
+                                    null
+                                });
+                                Console.WriteLine($"[MauiDevFlow.Blazor.Gtk] Registered CDP WebView bridge {registeredCount}");
+                            }
+                            catch { }
+                            registeredCount++;
+                        }
+                    }
+                });
+            }
+            else
+            {
+                // Fallback: legacy single-delegate wiring
+                var handlerProp = agentType.GetProperty("CdpCommandHandler");
+                var readyProp = agentType.GetProperty("CdpReadyCheck");
+
+                if (handlerProp != null)
+                    handlerProp.SetValue(agentService, new Func<string, Task<string>>(blazorService.SendCdpCommandAsync));
+
+                if (readyProp != null)
+                    readyProp.SetValue(agentService, new Func<bool>(() => blazorService.IsReady));
+            }
 
             // Wire WebViewLogCallback
             var writeLogMethod = agentType.GetMethod("WriteWebViewLog");

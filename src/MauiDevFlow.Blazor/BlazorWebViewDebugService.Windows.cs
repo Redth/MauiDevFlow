@@ -14,30 +14,10 @@ namespace MauiDevFlow.Blazor;
 /// </summary>
 public class BlazorWebViewDebugService : BlazorWebViewDebugServiceBase
 {
-    private CoreWebView2? _coreWebView;
-    private bool _hooked;
-
     public BlazorWebViewDebugService() { }
-
-    protected override bool HasWebView => _coreWebView != null;
-
-    protected override async Task<string?> EvaluateJavaScriptAsync(string script)
-    {
-        if (_coreWebView == null) return null;
-
-        // WebView2 APIs are UI-thread-affinitized
-        var result = await MainThread.InvokeOnMainThreadAsync(async () =>
-        {
-            return await _coreWebView.ExecuteScriptAsync(script);
-        });
-
-        return DecodeWebView2Result(result);
-    }
 
     /// <summary>
     /// Decodes the JSON-encoded result from WebView2's ExecuteScriptAsync.
-    /// ExecuteScriptAsync always returns a JSON value: strings are quoted,
-    /// numbers/booleans are bare, null is "null".
     /// </summary>
     private static string? DecodeWebView2Result(string? result)
     {
@@ -60,12 +40,6 @@ public class BlazorWebViewDebugService : BlazorWebViewDebugServiceBase
         }
     }
 
-    protected override void ReloadWebView()
-        => MainThread.BeginInvokeOnMainThread(() => _coreWebView?.Reload());
-
-    protected override void NavigateWebView(string url)
-        => MainThread.BeginInvokeOnMainThread(() => _coreWebView?.Navigate(url));
-
     public override void ConfigureHandler()
     {
         Log("[BlazorDevFlow] ConfigureHandler called (Windows)");
@@ -74,33 +48,43 @@ public class BlazorWebViewDebugService : BlazorWebViewDebugServiceBase
         {
             Log("[BlazorDevFlow] ChobitsuDebug mapper callback triggered (Windows)");
 
-            // Guard against duplicate mapper callbacks
-            if (_coreWebView != null) return;
-
             if (handler.PlatformView is WinUIWebView webView2)
             {
+                var automationId = (handler.VirtualView as VisualElement)?.AutomationId;
+
+                async Task CaptureWebView(CoreWebView2 coreWebView)
+                {
+                    var idx = AddWebViewBridge(
+                        async (script) =>
+                        {
+                            var result = await MainThread.InvokeOnMainThreadAsync(async () =>
+                            {
+                                return await coreWebView.ExecuteScriptAsync(script);
+                            });
+                            return DecodeWebView2Result(result);
+                        },
+                        () => MainThread.BeginInvokeOnMainThread(() => coreWebView.Reload()),
+                        (url) => MainThread.BeginInvokeOnMainThread(() => coreWebView.Navigate(url)),
+                        automationId);
+                    Log($"[BlazorDevFlow] WebView2 captured as bridge {idx} (automationId={automationId})");
+                    await InitializeBridgeAsync(idx);
+                }
+
                 if (webView2.CoreWebView2 != null)
                 {
-                    _coreWebView = webView2.CoreWebView2;
-                    Log("[BlazorDevFlow] WebView2 CoreWebView2 captured successfully");
-                    await OnWebViewCapturedAsync();
+                    await CaptureWebView(webView2.CoreWebView2);
                 }
-                else if (!_hooked)
+                else
                 {
-                    _hooked = true;
                     webView2.CoreWebView2Initialized += async (s, e) =>
                     {
-                        if (_coreWebView != null) return;
-
                         if (e.Exception != null)
                         {
                             Log($"[BlazorDevFlow] CoreWebView2 initialization failed: {e.Exception.Message}");
                             return;
                         }
 
-                        _coreWebView = webView2.CoreWebView2;
-                        Log("[BlazorDevFlow] WebView2 CoreWebView2 captured via Initialized event");
-                        await OnWebViewCapturedAsync();
+                        await CaptureWebView(webView2.CoreWebView2);
                     };
                 }
             }

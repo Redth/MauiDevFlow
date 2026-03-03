@@ -274,10 +274,13 @@ AutomationId, suffixes are appended: `TodoCheckBox`, `TodoCheckBox_1`, `TodoChec
 
 Global options: `--agent-host` (default localhost), `--agent-port` (auto-discovered via broker).
 CDP commands use the same agent port — all communication goes through a single port.
+Use `--webview <id>` (or `-w <id>`) on any CDP command to target a specific WebView
+by index, AutomationId, or element ID. Default: first WebView.
 
 | Command | Description |
 |---------|-------------|
-| `cdp status` | CDP connection status |
+| `cdp status` | CDP connection status and WebView count |
+| `cdp webviews [--json]` | List available CDP WebViews (index, AutomationId, ready status) |
 | `cdp snapshot` | Accessible DOM text (best for AI agents) |
 | `cdp Browser getVersion` | Browser/WebView version info |
 | `cdp Runtime evaluate <expr>` | Evaluate JavaScript |
@@ -291,6 +294,10 @@ CDP commands use the same agent port — all communication goes through a single
 | `cdp Input dispatchClickEvent <sel>` | Click element by CSS selector |
 | `cdp Input insertText <text>` | Insert text at focused element |
 | `cdp Input fill <selector> <text>` | Focus + fill text into element |
+
+**Multi-WebView targeting:** If the app has multiple BlazorWebViews, use `cdp webviews`
+to list them, then `--webview <index-or-automationId>` on any command to target a specific one.
+Example: `maui-devflow cdp --webview 1 snapshot` or `maui-devflow cdp -w MyWebView Runtime evaluate "1+1"`.
 
 ### maui-devflow Broker & Discovery
 

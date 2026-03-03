@@ -41,12 +41,18 @@ class Program
         // ===== CDP commands (Blazor WebView) =====
         
         var cdpCommand = new Command("cdp", "Blazor WebView automation via Chrome DevTools Protocol");
+
+        var webviewOption = new Option<string?>(
+            ["--webview", "-w"],
+            () => null,
+            "Target WebView by index, AutomationId, or element ID (default: first WebView)");
+        cdpCommand.AddGlobalOption(webviewOption);
         
         // Browser domain commands
         var browserCommand = new Command("Browser", "Browser domain commands");
         
         var getVersionCmd = new Command("getVersion", "Get browser version info");
-        getVersionCmd.SetHandler(async (host, port) => await BrowserGetVersionAsync(host, port), agentHostOption, agentPortOption);
+        getVersionCmd.SetHandler(async (host, port, wv) => await BrowserGetVersionAsync(host, port, wv), agentHostOption, agentPortOption, webviewOption);
         browserCommand.Add(getVersionCmd);
         
         cdpCommand.Add(browserCommand);
@@ -56,7 +62,7 @@ class Program
         
         var evaluateArg = new Argument<string>("expression", "JavaScript expression");
         var evaluateCmd = new Command("evaluate", "Evaluate JavaScript expression") { evaluateArg };
-        evaluateCmd.SetHandler(async (host, port, expr) => await RuntimeEvaluateAsync(host, port, expr), agentHostOption, agentPortOption, evaluateArg);
+        evaluateCmd.SetHandler(async (host, port, expr, wv) => await RuntimeEvaluateAsync(host, port, expr, wv), agentHostOption, agentPortOption, evaluateArg, webviewOption);
         runtimeCommand.Add(evaluateCmd);
         
         cdpCommand.Add(runtimeCommand);
@@ -65,22 +71,22 @@ class Program
         var domCommand = new Command("DOM", "DOM domain commands");
         
         var getDocumentCmd = new Command("getDocument", "Get document root node");
-        getDocumentCmd.SetHandler(async (host, port) => await DomGetDocumentAsync(host, port), agentHostOption, agentPortOption);
+        getDocumentCmd.SetHandler(async (host, port, wv) => await DomGetDocumentAsync(host, port, wv), agentHostOption, agentPortOption, webviewOption);
         domCommand.Add(getDocumentCmd);
         
         var querySelectorArg = new Argument<string>("selector", "CSS selector");
         var querySelectorCmd = new Command("querySelector", "Find element by CSS selector") { querySelectorArg };
-        querySelectorCmd.SetHandler(async (host, port, selector) => await DomQuerySelectorAsync(host, port, selector), agentHostOption, agentPortOption, querySelectorArg);
+        querySelectorCmd.SetHandler(async (host, port, selector, wv) => await DomQuerySelectorAsync(host, port, selector, wv), agentHostOption, agentPortOption, querySelectorArg, webviewOption);
         domCommand.Add(querySelectorCmd);
         
         var querySelectorAllArg = new Argument<string>("selector", "CSS selector");
         var querySelectorAllCmd = new Command("querySelectorAll", "Find all elements by CSS selector") { querySelectorAllArg };
-        querySelectorAllCmd.SetHandler(async (host, port, selector) => await DomQuerySelectorAllAsync(host, port, selector), agentHostOption, agentPortOption, querySelectorAllArg);
+        querySelectorAllCmd.SetHandler(async (host, port, selector, wv) => await DomQuerySelectorAllAsync(host, port, selector, wv), agentHostOption, agentPortOption, querySelectorAllArg, webviewOption);
         domCommand.Add(querySelectorAllCmd);
         
         var getOuterHtmlArg = new Argument<string>("selector", "CSS selector");
         var getOuterHtmlCmd = new Command("getOuterHTML", "Get element HTML") { getOuterHtmlArg };
-        getOuterHtmlCmd.SetHandler(async (host, port, selector) => await DomGetOuterHtmlAsync(host, port, selector), agentHostOption, agentPortOption, getOuterHtmlArg);
+        getOuterHtmlCmd.SetHandler(async (host, port, selector, wv) => await DomGetOuterHtmlAsync(host, port, selector, wv), agentHostOption, agentPortOption, getOuterHtmlArg, webviewOption);
         domCommand.Add(getOuterHtmlCmd);
         
         cdpCommand.Add(domCommand);
@@ -90,15 +96,15 @@ class Program
         
         var navigateArg = new Argument<string>("url", "URL to navigate to");
         var navigateCmd = new Command("navigate", "Navigate to URL") { navigateArg };
-        navigateCmd.SetHandler(async (host, port, url) => await PageNavigateAsync(host, port, url), agentHostOption, agentPortOption, navigateArg);
+        navigateCmd.SetHandler(async (host, port, url, wv) => await PageNavigateAsync(host, port, url, wv), agentHostOption, agentPortOption, navigateArg, webviewOption);
         pageCommand.Add(navigateCmd);
         
         var reloadCmd = new Command("reload", "Reload page");
-        reloadCmd.SetHandler(async (host, port) => await PageReloadAsync(host, port), agentHostOption, agentPortOption);
+        reloadCmd.SetHandler(async (host, port, wv) => await PageReloadAsync(host, port, wv), agentHostOption, agentPortOption, webviewOption);
         pageCommand.Add(reloadCmd);
         
         var captureScreenshotCmd = new Command("captureScreenshot", "Capture page screenshot (base64)");
-        captureScreenshotCmd.SetHandler(async (host, port) => await PageCaptureScreenshotAsync(host, port), agentHostOption, agentPortOption);
+        captureScreenshotCmd.SetHandler(async (host, port, wv) => await PageCaptureScreenshotAsync(host, port, wv), agentHostOption, agentPortOption, webviewOption);
         pageCommand.Add(captureScreenshotCmd);
         
         cdpCommand.Add(pageCommand);
@@ -108,30 +114,36 @@ class Program
         
         var clickSelectorArg = new Argument<string>("selector", "CSS selector of element to click");
         var dispatchClickCmd = new Command("dispatchClickEvent", "Click element by selector") { clickSelectorArg };
-        dispatchClickCmd.SetHandler(async (host, port, selector) => await InputDispatchClickAsync(host, port, selector), agentHostOption, agentPortOption, clickSelectorArg);
+        dispatchClickCmd.SetHandler(async (host, port, selector, wv) => await InputDispatchClickAsync(host, port, selector, wv), agentHostOption, agentPortOption, clickSelectorArg, webviewOption);
         inputCommand.Add(dispatchClickCmd);
         
         var insertTextArg = new Argument<string>("text", "Text to insert");
         var insertTextCmd = new Command("insertText", "Insert text at cursor") { insertTextArg };
-        insertTextCmd.SetHandler(async (host, port, text) => await InputInsertTextAsync(host, port, text), agentHostOption, agentPortOption, insertTextArg);
+        insertTextCmd.SetHandler(async (host, port, text, wv) => await InputInsertTextAsync(host, port, text, wv), agentHostOption, agentPortOption, insertTextArg, webviewOption);
         inputCommand.Add(insertTextCmd);
         
         var fillSelectorArg = new Argument<string>("selector", "CSS selector");
         var fillTextArg = new Argument<string>("text", "Text to fill");
         var fillCmd = new Command("fill", "Fill form field with text") { fillSelectorArg, fillTextArg };
-        fillCmd.SetHandler(async (host, port, selector, text) => await InputFillAsync(host, port, selector, text), agentHostOption, agentPortOption, fillSelectorArg, fillTextArg);
+        fillCmd.SetHandler(async (host, port, selector, text, wv) => await InputFillAsync(host, port, selector, text, wv), agentHostOption, agentPortOption, fillSelectorArg, fillTextArg, webviewOption);
         inputCommand.Add(fillCmd);
         
         cdpCommand.Add(inputCommand);
         
         // Convenience commands
         var statusCmd = new Command("status", "Check CDP connection status");
-        statusCmd.SetHandler(async (host, port) => await CdpStatusAsync(host, port), agentHostOption, agentPortOption);
+        statusCmd.SetHandler(async (host, port, wv) => await CdpStatusAsync(host, port, wv), agentHostOption, agentPortOption, webviewOption);
         cdpCommand.Add(statusCmd);
         
         var snapshotCmd = new Command("snapshot", "Get simplified DOM snapshot with element refs");
-        snapshotCmd.SetHandler(async (host, port) => await SnapshotAsync(host, port), agentHostOption, agentPortOption);
+        snapshotCmd.SetHandler(async (host, port, wv) => await SnapshotAsync(host, port, wv), agentHostOption, agentPortOption, webviewOption);
         cdpCommand.Add(snapshotCmd);
+
+        var webviewsCmd = new Command("webviews", "List available CDP WebViews");
+        var webviewsJsonOption = new Option<bool>("--json", () => false, "Output as JSON");
+        webviewsCmd.Add(webviewsJsonOption);
+        webviewsCmd.SetHandler(async (host, port, json) => await CdpWebViewsAsync(host, port, json), agentHostOption, agentPortOption, webviewsJsonOption);
+        cdpCommand.Add(webviewsCmd);
         
         rootCommand.Add(cdpCommand);
         
@@ -451,7 +463,7 @@ class Program
     
     // ===== CDP Helper: Send command via HTTP POST /api/cdp =====
 
-    private static async Task<JsonElement?> SendCdpCommandAsync(string host, int port, string method, object? parameters = null)
+    private static async Task<JsonElement?> SendCdpCommandAsync(string host, int port, string method, object? parameters = null, string? webview = null)
     {
         using var http = new HttpClient();
         http.Timeout = TimeSpan.FromSeconds(30);
@@ -466,7 +478,10 @@ class Program
 
         var json = JsonSerializer.Serialize(command);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
-        var response = await http.PostAsync($"http://{host}:{port}/api/cdp", content);
+        var url = string.IsNullOrEmpty(webview)
+            ? $"http://{host}:{port}/api/cdp"
+            : $"http://{host}:{port}/api/cdp?webview={Uri.EscapeDataString(webview)}";
+        var response = await http.PostAsync(url, content);
         var body = await response.Content.ReadAsStringAsync();
 
         if (!response.IsSuccessStatusCode)
@@ -475,13 +490,13 @@ class Program
         return JsonSerializer.Deserialize<JsonElement>(body);
     }
 
-    private static async Task<string> CdpEvaluateAsync(string host, int port, string expression)
+    private static async Task<string> CdpEvaluateAsync(string host, int port, string expression, string? webview = null)
     {
         var result = await SendCdpCommandAsync(host, port, "Runtime.evaluate", new
         {
             expression,
             returnByValue = true
-        });
+        }, webview);
 
         if (result == null) return "null";
         var root = result.Value;
@@ -515,11 +530,11 @@ class Program
 
     // ===== Browser Domain =====
     
-    private static async Task BrowserGetVersionAsync(string host, int port)
+    private static async Task BrowserGetVersionAsync(string host, int port, string? webview = null)
     {
         try
         {
-            var result = await SendCdpCommandAsync(host, port, "Browser.getVersion");
+            var result = await SendCdpCommandAsync(host, port, "Browser.getVersion", webview: webview);
             Console.WriteLine(result.HasValue ? FormatJson(result.Value) : "null");
         }
         catch (Exception ex) { WriteError(ex.Message); }
@@ -527,11 +542,11 @@ class Program
     
     // ===== Runtime Domain =====
     
-    private static async Task RuntimeEvaluateAsync(string host, int port, string expression)
+    private static async Task RuntimeEvaluateAsync(string host, int port, string expression, string? webview = null)
     {
         try
         {
-            var result = await CdpEvaluateAsync(host, port, expression);
+            var result = await CdpEvaluateAsync(host, port, expression, webview);
             Console.WriteLine(result);
         }
         catch (Exception ex) { WriteError(ex.Message); }
@@ -539,23 +554,23 @@ class Program
     
     // ===== DOM Domain =====
     
-    private static async Task DomGetDocumentAsync(string host, int port)
+    private static async Task DomGetDocumentAsync(string host, int port, string? webview = null)
     {
         try
         {
-            var result = await SendCdpCommandAsync(host, port, "DOM.getDocument");
+            var result = await SendCdpCommandAsync(host, port, "DOM.getDocument", webview: webview);
             Console.WriteLine(result.HasValue ? FormatJson(result.Value) : "null");
         }
         catch (Exception ex) { WriteError(ex.Message); }
     }
     
-    private static async Task DomQuerySelectorAsync(string host, int port, string selector)
+    private static async Task DomQuerySelectorAsync(string host, int port, string selector, string? webview = null)
     {
         try
         {
             var result = await CdpEvaluateAsync(host, port, $@"
                 JSON.stringify((function() {{
-                    const el = document.querySelector({JsonSerializer.Serialize(selector)});
+                    const el = document.querySelector({JsonSerializer.Serialize(selector)}, webview);
                     if (!el) return null;
                     return {{
                         tagName: el.tagName.toLowerCase(),
@@ -570,13 +585,13 @@ class Program
         catch (Exception ex) { WriteError(ex.Message); }
     }
     
-    private static async Task DomQuerySelectorAllAsync(string host, int port, string selector)
+    private static async Task DomQuerySelectorAllAsync(string host, int port, string selector, string? webview = null)
     {
         try
         {
             var result = await CdpEvaluateAsync(host, port, $@"
                 JSON.stringify((function() {{
-                    const els = document.querySelectorAll({JsonSerializer.Serialize(selector)});
+                    const els = document.querySelectorAll({JsonSerializer.Serialize(selector)}, webview);
                     return Array.from(els).map((el, i) => ({{
                         index: i,
                         tagName: el.tagName.toLowerCase(),
@@ -591,11 +606,11 @@ class Program
         catch (Exception ex) { WriteError(ex.Message); }
     }
     
-    private static async Task DomGetOuterHtmlAsync(string host, int port, string selector)
+    private static async Task DomGetOuterHtmlAsync(string host, int port, string selector, string? webview = null)
     {
         try
         {
-            var result = await CdpEvaluateAsync(host, port, $@"document.querySelector({JsonSerializer.Serialize(selector)})?.outerHTML || null");
+            var result = await CdpEvaluateAsync(host, port, $@"document.querySelector({JsonSerializer.Serialize(selector)})?.outerHTML || null", webview);
             Console.WriteLine(result);
         }
         catch (Exception ex) { WriteError(ex.Message); }
@@ -603,31 +618,31 @@ class Program
     
     // ===== Page Domain =====
     
-    private static async Task PageNavigateAsync(string host, int port, string url)
+    private static async Task PageNavigateAsync(string host, int port, string url, string? webview = null)
     {
         try
         {
-            await SendCdpCommandAsync(host, port, "Page.navigate", new { url });
+            await SendCdpCommandAsync(host, port, "Page.navigate", new { url }, webview);
             Console.WriteLine($"Navigated to: {url}");
         }
         catch (Exception ex) { WriteError(ex.Message); }
     }
     
-    private static async Task PageReloadAsync(string host, int port)
+    private static async Task PageReloadAsync(string host, int port, string? webview = null)
     {
         try
         {
-            await SendCdpCommandAsync(host, port, "Page.reload");
+            await SendCdpCommandAsync(host, port, "Page.reload", webview: webview);
             Console.WriteLine("Page reloaded");
         }
         catch (Exception ex) { WriteError(ex.Message); }
     }
     
-    private static async Task PageCaptureScreenshotAsync(string host, int port)
+    private static async Task PageCaptureScreenshotAsync(string host, int port, string? webview = null)
     {
         try
         {
-            var result = await SendCdpCommandAsync(host, port, "Page.captureScreenshot");
+            var result = await SendCdpCommandAsync(host, port, "Page.captureScreenshot", webview: webview);
             if (result.HasValue &&
                 result.Value.TryGetProperty("result", out var resultProp) && 
                 resultProp.TryGetProperty("data", out var dataProp))
@@ -644,13 +659,13 @@ class Program
     
     // ===== Input Domain =====
     
-    private static async Task InputDispatchClickAsync(string host, int port, string selector)
+    private static async Task InputDispatchClickAsync(string host, int port, string selector, string? webview = null)
     {
         try
         {
             var result = await CdpEvaluateAsync(host, port, $@"
                 (function() {{
-                    const el = document.querySelector({JsonSerializer.Serialize(selector)});
+                    const el = document.querySelector({JsonSerializer.Serialize(selector)}, webview);
                     if (!el) return 'Error: Element not found';
                     el.click();
                     return 'Clicked: ' + el.tagName.toLowerCase() + (el.id ? '#' + el.id : '');
@@ -661,23 +676,23 @@ class Program
         catch (Exception ex) { WriteError(ex.Message); }
     }
     
-    private static async Task InputInsertTextAsync(string host, int port, string text)
+    private static async Task InputInsertTextAsync(string host, int port, string text, string? webview = null)
     {
         try
         {
-            var result = await SendCdpCommandAsync(host, port, "Input.insertText", new { text });
+            var result = await SendCdpCommandAsync(host, port, "Input.insertText", new { text }, webview);
             Console.WriteLine($"Inserted: {text.Length} characters");
         }
         catch (Exception ex) { WriteError(ex.Message); }
     }
     
-    private static async Task InputFillAsync(string host, int port, string selector, string text)
+    private static async Task InputFillAsync(string host, int port, string selector, string text, string? webview = null)
     {
         try
         {
             var result = await CdpEvaluateAsync(host, port, $@"
                 (function() {{
-                    const el = document.querySelector({JsonSerializer.Serialize(selector)});
+                    const el = document.querySelector({JsonSerializer.Serialize(selector)}, webview);
                     if (!el) return 'Error: Element not found';
                     
                     const text = {JsonSerializer.Serialize(text)};
@@ -699,7 +714,7 @@ class Program
     
     // ===== Convenience Commands =====
     
-    private static async Task CdpStatusAsync(string host, int port)
+    private static async Task CdpStatusAsync(string host, int port, string? webview = null)
     {
         try
         {
@@ -711,15 +726,61 @@ class Program
             var root = doc.RootElement;
 
             var cdpReady = root.TryGetProperty("cdpReady", out var cdpProp) && cdpProp.GetBoolean();
-            Console.WriteLine(cdpReady ? "Connected: CDP ready" : "Agent connected but CDP not ready");
+            var cdpCount = root.TryGetProperty("cdpWebViewCount", out var countProp) ? countProp.GetInt32() : 0;
+            Console.WriteLine(cdpReady
+                ? $"Connected: CDP ready ({cdpCount} WebView{(cdpCount != 1 ? "s" : "")})"
+                : "Agent connected but CDP not ready");
         }
         catch (Exception ex)
         {
             WriteError($"Not connected: {ex.Message}");
         }
     }
+
+    private static async Task CdpWebViewsAsync(string host, int port, bool json)
+    {
+        try
+        {
+            using var http = new HttpClient();
+            http.Timeout = TimeSpan.FromSeconds(5);
+            var response = await http.GetAsync($"http://{host}:{port}/api/cdp/webviews");
+            var body = await response.Content.ReadAsStringAsync();
+
+            if (json)
+            {
+                Console.WriteLine(body);
+                return;
+            }
+
+            var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("webviews", out var webviews))
+            {
+                if (webviews.GetArrayLength() == 0)
+                {
+                    Console.WriteLine("No CDP WebViews registered");
+                    return;
+                }
+
+                Console.WriteLine($"{"Index",-6} {"AutomationId",-20} {"ElementId",-12} {"Ready",-6} {"URL"}");
+                Console.WriteLine(new string('-', 70));
+                foreach (var wv in webviews.EnumerateArray())
+                {
+                    var index = wv.TryGetProperty("index", out var idx) ? idx.GetInt32().ToString() : "-";
+                    var autoId = wv.TryGetProperty("automationId", out var aid) ? aid.GetString() ?? "-" : "-";
+                    var elemId = wv.TryGetProperty("elementId", out var eid) ? eid.GetString() ?? "-" : "-";
+                    var ready = wv.TryGetProperty("isReady", out var rdy) && rdy.GetBoolean() ? "Yes" : "No";
+                    var url = wv.TryGetProperty("url", out var urlProp) ? urlProp.GetString() ?? "-" : "-";
+                    Console.WriteLine($"{index,-6} {autoId,-20} {elemId,-12} {ready,-6} {url}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            WriteError($"Failed to list WebViews: {ex.Message}");
+        }
+    }
     
-    private static async Task SnapshotAsync(string host, int port)
+    private static async Task SnapshotAsync(string host, int port, string? webview = null)
     {
         try
         {
@@ -728,7 +789,7 @@ class Program
                     function walk(node, depth) {
                         if (depth > 8) return '';
                         let result = '';
-                        const indent = '  '.repeat(depth);
+                        const indent = '  '.repeat(depth, webview);
                         
                         if (node.nodeType === 1) {
                             const tag = node.tagName.toLowerCase();

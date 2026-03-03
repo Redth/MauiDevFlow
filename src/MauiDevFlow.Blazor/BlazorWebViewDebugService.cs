@@ -11,26 +11,7 @@ namespace MauiDevFlow.Blazor;
 /// </summary>
 public class BlazorWebViewDebugService : BlazorWebViewDebugServiceBase
 {
-    private WKWebView? _webView;
-
     public BlazorWebViewDebugService() { }
-
-    protected override bool HasWebView => _webView != null;
-
-    protected override async Task<string?> EvaluateJavaScriptAsync(string script)
-    {
-        if (_webView == null) return null;
-        var result = await _webView.EvaluateJavaScriptAsync(script);
-        return result?.ToString();
-    }
-
-    protected override void ReloadWebView() => _webView!.Reload();
-
-    protected override void NavigateWebView(string url)
-    {
-        var request = new Foundation.NSUrlRequest(new Foundation.NSUrl(url));
-        _webView!.LoadRequest(request);
-    }
 
     public override void ConfigureHandler()
     {
@@ -42,9 +23,22 @@ public class BlazorWebViewDebugService : BlazorWebViewDebugServiceBase
 
             if (handler.PlatformView is WKWebView wkWebView)
             {
-                _webView = wkWebView;
-                Log("[BlazorDevFlow] WKWebView captured successfully");
-                await OnWebViewCapturedAsync();
+                var automationId = (handler.VirtualView as VisualElement)?.AutomationId;
+                var idx = AddWebViewBridge(
+                    async (script) =>
+                    {
+                        var result = await wkWebView.EvaluateJavaScriptAsync(script);
+                        return result?.ToString();
+                    },
+                    () => wkWebView.Reload(),
+                    (url) =>
+                    {
+                        var request = new Foundation.NSUrlRequest(new Foundation.NSUrl(url));
+                        wkWebView.LoadRequest(request);
+                    },
+                    automationId);
+                Log($"[BlazorDevFlow] WKWebView captured as bridge {idx} (automationId={automationId})");
+                await InitializeBridgeAsync(idx);
             }
             else
             {
@@ -70,26 +64,7 @@ namespace MauiDevFlow.Blazor;
 /// </summary>
 public class BlazorWebViewDebugService : BlazorWebViewDebugServiceBase
 {
-    private WKWebView? _webView;
-
     public BlazorWebViewDebugService() { }
-
-    protected override bool HasWebView => _webView != null;
-
-    protected override async Task<string?> EvaluateJavaScriptAsync(string script)
-    {
-        if (_webView == null) return null;
-        var result = await _webView.EvaluateJavaScriptAsync(script);
-        return result?.ToString();
-    }
-
-    protected override void ReloadWebView() => _webView!.Reload();
-
-    protected override void NavigateWebView(string url)
-    {
-        var request = new NSUrlRequest(new NSUrl(url));
-        _webView!.LoadRequest(request);
-    }
 
     protected override Task<T> RunOnMainThreadAsync<T>(Func<Task<T>> func)
     {
@@ -168,9 +143,22 @@ public class BlazorWebViewDebugService : BlazorWebViewDebugServiceBase
 
             if (handler.PlatformView is WKWebView wkWebView)
             {
-                _webView = wkWebView;
-                Log("[BlazorDevFlow] WKWebView captured successfully");
-                await OnWebViewCapturedAsync();
+                var automationId = (handler.VirtualView as VisualElement)?.AutomationId;
+                var idx = AddWebViewBridge(
+                    async (script) =>
+                    {
+                        var result = await wkWebView.EvaluateJavaScriptAsync(script);
+                        return result?.ToString();
+                    },
+                    () => wkWebView.Reload(),
+                    (url) =>
+                    {
+                        var request = new NSUrlRequest(new NSUrl(url));
+                        wkWebView.LoadRequest(request);
+                    },
+                    automationId);
+                Log($"[BlazorDevFlow] WKWebView captured as bridge {idx} (automationId={automationId})");
+                await InitializeBridgeAsync(idx);
             }
             else
             {
