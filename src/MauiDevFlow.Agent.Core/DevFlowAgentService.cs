@@ -263,10 +263,15 @@ public class DevFlowAgentService : IDisposable
         _server.MapPost("/api/action/navigate", HandleNavigate);
         _server.MapPost("/api/action/resize", HandleResize);
         _server.MapPost("/api/action/scroll", HandleScroll);
+        _server.MapPost("/api/action/highlight", HandleHighlight);
         _server.MapGet("/api/logs", HandleLogs);
         _server.MapPost("/api/cdp", HandleCdp);
         _server.MapGet("/api/cdp/webviews", HandleCdpWebViews);
         _server.MapGet("/api/cdp/source", HandleCdpSource);
+
+        // Accessibility
+        _server.MapGet("/api/accessibility", HandleAccessibility);
+        _server.MapGet("/api/a11y/native-tree", HandleNativeA11yTree);
 
         // Network monitoring
         _server.MapGet("/api/network", HandleNetworkList);
@@ -330,6 +335,105 @@ public class DevFlowAgentService : IDisposable
         var windowIndex = ParseWindowIndex(request);
         var tree = await DispatchAsync(() => _treeWalker.WalkTree(_app, maxDepth, windowIndex));
         return HttpResponse.Json(tree);
+    }
+
+    private async Task<HttpResponse> HandleAccessibility(HttpRequest request)
+    {
+        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+
+        var windowIndex = ParseWindowIndex(request);
+        var tree = await DispatchAsync(() => _treeWalker.WalkTree(_app, 0, windowIndex));
+
+        // Flatten the tree and extract only elements with accessibility info
+        var accessibilityElements = new List<object>();
+        var order = 0;
+        FlattenAccessibilityTree(tree, accessibilityElements, ref order);
+
+        return HttpResponse.Json(new
+        {
+            totalElements = CountElements(tree),
+            accessibilityElements,
+        });
+    }
+
+    private static void FlattenAccessibilityTree(List<ElementInfo> elements, List<object> result, ref int order)
+    {
+        foreach (var el in elements)
+        {
+            if (el.IsVisible && el.Accessibility != null)
+            {
+                var a11y = el.Accessibility;
+                // Include elements that a screen reader would visit:
+                // - explicitly marked as accessibility elements
+                // - have a label (announced text)
+                // - have a role (interactive or meaningful control)
+                // - have text content
+                if (a11y.IsAccessibilityElement
+                    || !string.IsNullOrEmpty(a11y.Label)
+                    || !string.IsNullOrEmpty(a11y.Role)
+                    || !string.IsNullOrEmpty(el.Text))
+                {
+                    // Use WindowBounds, fall back to Bounds
+                    var bounds = el.WindowBounds ?? el.Bounds;
+                    a11y.Order = order++;
+                    result.Add(new
+                    {
+                        el.Id,
+                        el.Type,
+                        el.AutomationId,
+                        el.Text,
+                        windowBounds = bounds,
+                        accessibility = a11y,
+                    });
+                }
+            }
+            if (el.Children != null)
+                FlattenAccessibilityTree(el.Children, result, ref order);
+        }
+    }
+
+    /// <summary>
+    /// Returns the native accessibility tree in the exact order the platform screen reader
+    /// (VoiceOver, TalkBack, Narrator) would visit elements. More accurate than the DFS
+    /// heuristic used by /api/accessibility, which assumes visual tree order == reading order.
+    /// </summary>
+    private async Task<HttpResponse> HandleNativeA11yTree(HttpRequest request)
+    {
+        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+
+        var windowIndex = ParseWindowIndex(request) ?? 0;
+
+        // Bounded MAUI tree walk (depth 100 is ample for any app) so we never
+        // block the main thread indefinitely on a large/complex visual tree.
+        // The walk only populates _elementIdToExternalId for native↔MAUI correlation.
+        var dispatchTask = DispatchAsync(() =>
+        {
+            _treeWalker.WalkTree(_app, 100, windowIndex);
+            return _treeWalker.GetNativeA11yTree(_app, windowIndex);
+        });
+
+        if (await Task.WhenAny(dispatchTask, Task.Delay(TimeSpan.FromSeconds(15))) != dispatchTask)
+            return HttpResponse.Error("Native tree walk timed out (15s). The app UI thread may be blocked.");
+
+        var entries = await dispatchTask;
+        return HttpResponse.Json(new
+        {
+            platform = DeviceInfo.Current.Platform.ToString(),
+            count = entries.Count,
+            entries,
+        });
+    }
+
+    private static int CountElements(List<ElementInfo> elements)
+    {
+        var count = 0;
+        foreach (var el in elements)
+        {
+            count++;
+            if (el.Children != null)
+                count += CountElements(el.Children);
+        }
+        return count;
     }
 
     private async Task<HttpResponse> HandleElement(HttpRequest request)
@@ -1223,6 +1327,100 @@ public class DevFlowAgentService : IDisposable
         return success ? HttpResponse.Ok("Focused") : HttpResponse.Error("Cannot focus element");
     }
 
+    // Active highlight cleanup timer — cancelled when a new highlight replaces it
+    private CancellationTokenSource? _highlightCts;
+
+    private async Task<HttpResponse> HandleHighlight(HttpRequest request)
+    {
+        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+
+        var body = request.BodyAs<HighlightRequest>();
+
+        // Cancel any previous highlight
+        _highlightCts?.Cancel();
+        _highlightCts = null;
+
+        // elementId = null, no fallback bounds → just clear
+        if (string.IsNullOrEmpty(body?.ElementId) && body?.X == null)
+        {
+            await DispatchAsync(() => { ClearNativeHighlight(); return true; });
+            return HttpResponse.Ok("Cleared");
+        }
+
+        BoundsInfo? bounds = null;
+
+        if (!string.IsNullOrEmpty(body?.ElementId))
+        {
+            bounds = await DispatchAsync(async () =>
+            {
+                var el = _treeWalker.GetElementById(body.ElementId, _app);
+                if (el is not VisualElement ve) return null;
+
+                // Scroll element into view first (no animation), then resolve bounds —
+                // bounds must be read AFTER scroll so they reflect the post-scroll position.
+                if (body.ScrollIntoView)
+                {
+                    try
+                    {
+                        Element? parent = ve.Parent;
+                        while (parent != null)
+                        {
+                            if (parent is ScrollView sv)
+                            {
+                                await sv.ScrollToAsync(ve, ScrollToPosition.Center, animated: false);
+                                break;
+                            }
+                            parent = parent.Parent;
+                        }
+                    }
+                    catch { /* scroll is best-effort */ }
+                }
+
+                return _treeWalker.ResolveWindowBoundsPublic(ve);
+            });
+        }
+
+        // Fallback: use raw window bounds supplied by caller (e.g. native-only tab bar items)
+        if (bounds == null && body?.X != null && body.Width != null && body.Height != null)
+        {
+            bounds = new BoundsInfo
+            {
+                X = body.X.Value, Y = body.Y ?? 0,
+                Width = body.Width.Value, Height = body.Height.Value,
+            };
+        }
+
+        if (bounds == null)
+            return HttpResponse.Error("Element not found or has no bounds");
+
+        var color = body?.Color ?? "#FF6B2FFF"; // default: accessible orange with full alpha
+        await DispatchAsync(() => { ShowNativeHighlight(bounds, color); return true; });
+
+        // Auto-clear after durationMs (default 3s)
+        var cts = new CancellationTokenSource();
+        _highlightCts = cts;
+        var durationMs = body?.DurationMs > 0 ? body.DurationMs : 3000;
+        _ = Task.Delay(durationMs, cts.Token).ContinueWith(async t =>
+        {
+            if (!t.IsCanceled)
+                await DispatchAsync(() => { ClearNativeHighlight(); return true; });
+        });
+
+        return HttpResponse.Ok("Highlighted");
+    }
+
+    /// <summary>
+    /// Override in platform-specific subclasses to draw a visible highlight overlay
+    /// at the given window-relative bounds. Called on the UI thread.
+    /// </summary>
+    protected virtual void ShowNativeHighlight(BoundsInfo bounds, string color) { }
+
+    /// <summary>
+    /// Override in platform-specific subclasses to remove the highlight overlay.
+    /// Called on the UI thread.
+    /// </summary>
+    protected virtual void ClearNativeHighlight() { }
+
     private async Task<HttpResponse> HandleNavigate(HttpRequest request)
     {
         if (_app == null) return HttpResponse.Error("Agent not bound to app");
@@ -1902,6 +2100,26 @@ public class DevFlowAgentService : IDisposable
 public class ActionRequest
 {
     public string? ElementId { get; set; }
+}
+
+public class HighlightRequest
+{
+    /// <summary>Element to highlight. Null or empty to just clear the current highlight.</summary>
+    public string? ElementId { get; set; }
+    /// <summary>Border color in #AARRGGBB or #RRGGBB format. Defaults to accessible orange.</summary>
+    public string? Color { get; set; }
+    /// <summary>Auto-clear after this many milliseconds. 0 = use default (2000ms).</summary>
+    public int DurationMs { get; set; }
+    /// <summary>
+    /// Fallback window-logical bounds used when ElementId is null or not found.
+    /// Allows highlighting native-only elements (e.g. tab bar buttons) that have no MAUI element ID.
+    /// </summary>
+    public double? X { get; set; }
+    public double? Y { get; set; }
+    public double? Width { get; set; }
+    public double? Height { get; set; }
+    /// <summary>When true, also scroll the element into view before highlighting.</summary>
+    public bool ScrollIntoView { get; set; } = true;
 }
 
 public class FillRequest

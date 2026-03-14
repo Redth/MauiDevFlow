@@ -450,4 +450,200 @@ public class PlatformAgentService : DevFlowAgentService
         return null;
     }
 #endif
+
+    // -----------------------------------------------------------------------
+    // Native Highlight Overlay
+    // Drawn directly on the native window layer — pixel-perfect because it uses
+    // the same coordinate origin as ResolveWindowBounds.
+    // -----------------------------------------------------------------------
+
+#if IOS || MACCATALYST
+    private UIKit.UIView? _highlightView;
+
+    protected override void ShowNativeHighlight(BoundsInfo bounds, string color)
+    {
+        ClearNativeHighlight();
+        var window = UIKit.UIApplication.SharedApplication.KeyWindow
+            ?? Microsoft.Maui.Controls.Application.Current?.Windows.FirstOrDefault()?.Handler?.PlatformView as UIKit.UIWindow;
+        var root = window?.RootViewController?.View;
+        if (root == null) return;
+
+        var parsed = ParseHexColor(color);
+        var highlight = new UIKit.UIView(new CoreGraphics.CGRect(bounds.X, bounds.Y, bounds.Width, bounds.Height))
+        {
+            BackgroundColor = UIKit.UIColor.Clear,
+            UserInteractionEnabled = false,
+            AccessibilityElementsHidden = true,
+        };
+        highlight.Layer.BorderColor = new CoreGraphics.CGColor(
+            (nfloat)((parsed.r) / 255.0),
+            (nfloat)((parsed.g) / 255.0),
+            (nfloat)((parsed.b) / 255.0),
+            (nfloat)((parsed.a) / 255.0));
+        highlight.Layer.BorderWidth = 3f;
+        // Subtle fill
+        highlight.BackgroundColor = UIKit.UIColor.FromRGBA(
+            (byte)parsed.r, (byte)parsed.g, (byte)parsed.b, (byte)Math.Min(40, parsed.a));
+
+        root.AddSubview(highlight);
+        _highlightView = highlight;
+    }
+
+    protected override void ClearNativeHighlight()
+    {
+        _highlightView?.RemoveFromSuperview();
+        _highlightView = null;
+    }
+#elif ANDROID
+    private Android.Views.View? _highlightView;
+
+    protected override void ShowNativeHighlight(BoundsInfo bounds, string color)
+    {
+        ClearNativeHighlight();
+        var activity = Microsoft.Maui.Controls.Application.Current?.Windows.FirstOrDefault()?.Handler?.PlatformView as Android.App.Activity;
+        if (activity?.Window?.DecorView is not Android.Views.ViewGroup decorView) return;
+
+        var density = activity.Resources?.DisplayMetrics?.Density ?? 1f;
+        var parsed = ParseHexColor(color);
+        var borderColor = Android.Graphics.Color.Argb(parsed.a, parsed.r, parsed.g, parsed.b);
+        var fillColor  = Android.Graphics.Color.Argb(Math.Min(40, parsed.a), parsed.r, parsed.g, parsed.b);
+
+        var drawable = new Android.Graphics.Drawables.GradientDrawable();
+        drawable.SetShape(Android.Graphics.Drawables.ShapeType.Rectangle);
+        drawable.SetColor(fillColor);
+        drawable.SetStroke((int)(3 * density), borderColor);
+
+        var view = new Android.Views.View(activity) { Background = drawable };
+        view.Focusable = false;
+        view.ImportantForAccessibility = Android.Views.ImportantForAccessibility.No;
+
+        var lp = new Android.Widget.FrameLayout.LayoutParams(
+            (int)(bounds.Width * density),
+            (int)(bounds.Height * density))
+        {
+            LeftMargin = (int)(bounds.X * density),
+            TopMargin  = (int)(bounds.Y * density),
+        };
+        decorView.AddView(view, lp);
+        _highlightView = view;
+    }
+
+    protected override void ClearNativeHighlight()
+    {
+        if (_highlightView?.Parent is Android.Views.ViewGroup parent)
+            parent.RemoveView(_highlightView);
+        _highlightView = null;
+    }
+#elif WINDOWS
+    private Microsoft.UI.Xaml.Shapes.Rectangle? _highlightView;
+
+    protected override void ShowNativeHighlight(BoundsInfo bounds, string color)
+    {
+        ClearNativeHighlight();
+        var window = Microsoft.Maui.Controls.Application.Current?.Windows.FirstOrDefault()?.Handler?.PlatformView as Microsoft.UI.Xaml.Window;
+        if (window?.Content is not Microsoft.UI.Xaml.FrameworkElement root) return;
+
+        // Find or create a Canvas overlay at root level
+        var canvas = FindOrCreateHighlightCanvas(root);
+        if (canvas == null) return;
+
+        var parsed = ParseHexColor(color);
+        var rect = new Microsoft.UI.Xaml.Shapes.Rectangle
+        {
+            Width  = bounds.Width,
+            Height = bounds.Height,
+            Fill   = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                Windows.UI.Color.FromArgb((byte)Math.Min(40, parsed.a), (byte)parsed.r, (byte)parsed.g, (byte)parsed.b)),
+            Stroke = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                Windows.UI.Color.FromArgb((byte)parsed.a, (byte)parsed.r, (byte)parsed.g, (byte)parsed.b)),
+            StrokeThickness = 3,
+            IsHitTestVisible = false,
+        };
+        Microsoft.UI.Xaml.Controls.Canvas.SetLeft(rect, bounds.X);
+        Microsoft.UI.Xaml.Controls.Canvas.SetTop(rect, bounds.Y);
+        canvas.Children.Add(rect);
+        _highlightView = rect;
+    }
+
+    protected override void ClearNativeHighlight()
+    {
+        if (_highlightView?.Parent is Microsoft.UI.Xaml.Controls.Canvas canvas)
+            canvas.Children.Remove(_highlightView);
+        _highlightView = null;
+    }
+
+    private static Microsoft.UI.Xaml.Controls.Canvas? FindOrCreateHighlightCanvas(Microsoft.UI.Xaml.FrameworkElement root)
+    {
+        // Look for existing highlight canvas in the visual tree root
+        if (root is Microsoft.UI.Xaml.Controls.Panel panel)
+        {
+            foreach (var child in panel.Children)
+            {
+                if (child is Microsoft.UI.Xaml.Controls.Canvas c && c.Name == "__devflow_highlight")
+                    return c;
+            }
+            var canvas = new Microsoft.UI.Xaml.Controls.Canvas
+            {
+                Name = "__devflow_highlight",
+                IsHitTestVisible = false,
+                Width  = root.ActualWidth,
+                Height = root.ActualHeight,
+            };
+            panel.Children.Add(canvas);
+            return canvas;
+        }
+        return null;
+    }
+#elif MACOS
+    private AppKit.NSView? _highlightView;
+
+    protected override void ShowNativeHighlight(BoundsInfo bounds, string color)
+    {
+        ClearNativeHighlight();
+        var nsWindow = AppKit.NSApplication.SharedApplication.KeyWindow
+            ?? (Microsoft.Maui.Controls.Application.Current?.Windows.FirstOrDefault()?.Handler?.PlatformView as AppKit.NSWindow);
+        if (nsWindow?.ContentView == null) return;
+
+        var parsed = ParseHexColor(color);
+        var highlight = new AppKit.NSView(new CoreGraphics.CGRect(
+            bounds.X,
+            nsWindow.ContentView.Bounds.Height - bounds.Y - bounds.Height,  // flip Y
+            bounds.Width,
+            bounds.Height))
+        {
+            WantsLayer = true,
+        };
+        highlight.Layer!.BorderColor = new CoreGraphics.CGColor(
+            (nfloat)(parsed.r / 255.0), (nfloat)(parsed.g / 255.0),
+            (nfloat)(parsed.b / 255.0), (nfloat)(parsed.a / 255.0));
+        highlight.Layer.BorderWidth = 3f;
+        highlight.Layer.BackgroundColor = new CoreGraphics.CGColor(
+            (nfloat)(parsed.r / 255.0), (nfloat)(parsed.g / 255.0),
+            (nfloat)(parsed.b / 255.0), (nfloat)(Math.Min(40, parsed.a) / 255.0));
+
+        nsWindow.ContentView.AddSubview(highlight);
+        _highlightView = highlight;
+    }
+
+    protected override void ClearNativeHighlight()
+    {
+        _highlightView?.RemoveFromSuperview();
+        _highlightView = null;
+    }
+#endif
+
+    /// <summary>Parses #AARRGGBB or #RRGGBB hex color string into components.</summary>
+    private static (int a, int r, int g, int b) ParseHexColor(string hex)
+    {
+        hex = hex.TrimStart('#');
+        if (hex.Length == 6)
+            hex = "FF" + hex;
+        if (hex.Length != 8)
+            return (255, 0x10, 0x7C, 0x10); // fallback green
+        return (
+            Convert.ToInt32(hex[..2], 16),
+            Convert.ToInt32(hex[2..4], 16),
+            Convert.ToInt32(hex[4..6], 16),
+            Convert.ToInt32(hex[6..8], 16));
+    }
 }
