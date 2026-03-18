@@ -206,10 +206,15 @@ Key subcommands beyond the basics:
   ```bash
   rm -rf ~/Library/Saved\ Application\ State/<bundle-id>.savedState
   ```
-  Or detect and dismiss via AppleScript:
-  ```bash
-  osascript -e 'tell application "System Events" to tell process "AppName" to click button "Reopen" of window 1'
-  ```
+  If the dialog persists after clearing saved state, **ask the user to dismiss it manually**.
+
+  > **CI / unattended only:** In environments with no active user, you may dismiss the dialog
+  > via AppleScript as a last resort:
+  > ```bash
+  > osascript -e 'tell application "System Events" to tell process "AppName" to click button "Reopen" of window 1'
+  > ```
+  > Do not use this in attended sessions — it steals focus. See
+  > [Non-Disruptive Operation](../SKILL.md#%EF%B8%8F-non-disruptive-operation).
 - **"Unable to lookup in current state: Shutdown"**: Simulator not booted. Run `xcrun simctl boot <UDID>`.
 - **Build error NETSDK1005 "Assets file doesn't have a target"**: Wrong TFM. Check
   `<TargetFrameworks>` in .csproj and use matching version (e.g. `net10.0-ios` not `net9.0-ios`).
@@ -306,14 +311,21 @@ Use these to test and validate dialog detection and dismissal workflows.
 
 ### Toggle dark mode
 ```bash
-# macOS (affects Mac Catalyst apps)
-osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to true'
-osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to false'
-
-# iOS Simulator
+# iOS Simulator (preferred — non-disruptive)
 xcrun simctl ui <UDID> appearance dark
 xcrun simctl ui <UDID> appearance light
 ```
+
+For Mac Catalyst apps, **ask the user** to toggle dark mode via System Settings.
+
+> **CI / unattended only:** In environments with no active user, you may toggle dark mode
+> via AppleScript:
+> ```bash
+> osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to true'
+> osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to false'
+> ```
+> Do not use this in attended sessions — it steals focus and requires Accessibility permissions.
+> See [Non-Disruptive Operation](../SKILL.md#%EF%B8%8F-non-disruptive-operation).
 
 ### Verify dark mode via inspection
 Use `maui-devflow` to verify colors without relying on screenshots:

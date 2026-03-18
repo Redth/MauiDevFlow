@@ -81,14 +81,19 @@ directly to `http://localhost:<port>`. No port forwarding (unlike Android) or en
 
 ## Key Simulation
 
-The `LinuxAppDriver` uses `xdotool` for key simulation. Install it if needed:
+> **⚠️ Non-Disruptive Operation:** `xdotool` and `ydotool` simulate input at the OS level
+> and require window focus — they **will disrupt the user's session**. Do not use them
+> during normal development. If alert dismissal or keyboard input is needed, **ask the user**
+> to perform it manually. See [SKILL.md § Non-Disruptive Operation](../SKILL.md#%EF%B8%8F-non-disruptive-operation).
+
+The `LinuxAppDriver` uses `xdotool` internally for key simulation in unattended/CI
+environments. Install it if needed:
 
 ```bash
 sudo apt install xdotool
 ```
 
-For Wayland-only environments, `ydotool` may be needed instead. Key simulation is used
-by the CLI for alert dismissal and keyboard input.
+For Wayland-only environments, `ydotool` may be needed instead.
 
 ## Platform Differences
 
@@ -112,10 +117,11 @@ by the CLI for alert dismissal and keyboard input.
 2. Check that `Application.Current` is available when `StartDevFlowAgent()` runs
 3. Verify the port isn't in use: `lsof -i :<port>` or `ss -tlnp | grep <port>`
 
-### xdotool Not Working
+### xdotool Not Working (CI / Unattended Only)
 
 - On Wayland, `xdotool` may not work. Try `ydotool` instead
 - Ensure the app window has focus for key events
+- In attended environments, do not use `xdotool` — ask the user instead
 
 ### WebKitGTK CDP Issues
 
