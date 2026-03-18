@@ -162,7 +162,9 @@ public class PlatformVisualTreeWalker : VisualTreeWalker
                 else if (frameworkElement is Microsoft.UI.Xaml.Controls.Control ctrl
                     && ctrl.Foreground is Microsoft.UI.Xaml.Media.SolidColorBrush ctrlBrush)
                     fg = ctrlBrush.Color;
-                if (frameworkElement.Background is Microsoft.UI.Xaml.Media.SolidColorBrush bgBrush)
+                var bgBrushRaw = (frameworkElement as Microsoft.UI.Xaml.Controls.Control)?.Background
+                    ?? (frameworkElement as Microsoft.UI.Xaml.Controls.Panel)?.Background;
+                if (bgBrushRaw is Microsoft.UI.Xaml.Media.SolidColorBrush bgBrush)
                     bg = bgBrush.Color;
                 if (fg.HasValue)
                     info.EffectiveTextColor = $"#{fg.Value.A:X2}{fg.Value.R:X2}{fg.Value.G:X2}{fg.Value.B:X2}";
@@ -1297,7 +1299,7 @@ public class PlatformVisualTreeWalker : VisualTreeWalker
         if (element is Microsoft.UI.Xaml.FrameworkElement fe)
         {
             var peer = Microsoft.UI.Xaml.Automation.Peers.FrameworkElementAutomationPeer.FromElement(fe);
-            if (peer != null && peer.IsContentElementCore())
+            if (peer != null && peer.IsContentElement())
             {
                 var name = peer.GetName();
                 var controlType = peer.GetAutomationControlType();
