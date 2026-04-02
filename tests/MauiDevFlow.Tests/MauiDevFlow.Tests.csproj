@@ -14,6 +14,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MauiDevFlow.Agent.Core\MauiDevFlow.Agent.Core.csproj" />
+    <ProjectReference Include="..\..\src\MauiDevFlow.CLI\MauiDevFlow.CLI.csproj" />
     <ProjectReference Include="..\..\src\MauiDevFlow.Driver\MauiDevFlow.Driver.csproj" />
     <ProjectReference Include="..\..\src\MauiDevFlow.Logging\MauiDevFlow.Logging.csproj" />
   </ItemGroup>

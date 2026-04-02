@@ -12,7 +12,7 @@ MauiDevFlow is a toolkit for AI-assisted .NET MAUI app development. It provides:
 - **Blazor CDP GTK** (`MauiDevFlow.Blazor.Gtk`) — Blazor CDP bridge for WebKitGTK on Linux
 - **CLI Tool** (`MauiDevFlow.CLI`) — Terminal commands for both native MAUI and Blazor automation
 - **Driver Library** (`MauiDevFlow.Driver`) — Platform-aware orchestration (Mac Catalyst, Android, iOS, Windows, Linux)
-- **AI Skill** (`.claude/skills/maui-ai-debugging/`) — Skill files teaching AI agents the full build→deploy→inspect→fix workflow
+- **AI Skill** (`maui-ai-debugging`) — Host-installable skill files teaching AI agents the full build→deploy→inspect→fix workflow
 
 ## Architecture
 
@@ -87,12 +87,15 @@ The Driver library (`Redth.MauiDevFlow.Driver`) conditionally references `Intero
 
 ## Skill System
 
-The `.claude/skills/maui-ai-debugging/` directory contains AI skill files:
+The canonical skill source lives in `.claude/skills/maui-ai-debugging/` and is installable for
+multiple hosts:
 - `SKILL.md` — Main skill document with full command reference and workflows
 - `references/setup.md` — Detailed setup guide
 - `references/*.md` — Platform-specific guides
 
-The CLI command `maui-devflow update-skill` downloads the latest skill files from GitHub. When updating skill docs, keep `SKILL.md` as the authoritative command reference.
+The CLI command `maui-devflow update-skill --host <claude|codex>` downloads the latest skill files
+from GitHub into the host-specific install path (`.claude/...` for Claude, `.agents/...` for
+Codex). When updating skill docs, keep `SKILL.md` as the authoritative command reference.
 
 ## Logging Architecture
 
