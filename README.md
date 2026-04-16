@@ -1,4 +1,10 @@
-# MauiDevFlow
+## MauiDevFlow
+
+# MOVED TO: [dotnet/maui-labs](https://github.com/dotnet/maui-labs/tree/main/src/DevFlow)
+MAUI DevFlow is growing up and moving into the dotnet maui-labs repository so we can give it more love and attention!
+
+
+# ARCHIVED:
 
 Unified tooling for automating and debugging .NET MAUI apps — both native MAUI and Blazor Hybrid.
 Built to enable AI agents (and humans) to build, deploy, inspect, and debug MAUI apps entirely
