@@ -785,11 +785,15 @@ class Program
             ["--branch", "-b"],
             () => "main",
             "GitHub branch to download from");
+        var hostOption = new Option<string>(
+            "--host",
+            () => "claude",
+            "Skill host to install for (claude or codex)");
         var updateSkillCmd = new Command("update-skill", "Download the latest maui-ai-debugging skill from GitHub")
         {
-            forceOption, outputDirOption, branchOption
+            forceOption, outputDirOption, branchOption, hostOption
         };
-        updateSkillCmd.SetHandler(async (force, output, branch) => await UpdateSkillAsync(force, output, branch), forceOption, outputDirOption, branchOption);
+        updateSkillCmd.SetHandler(async (force, output, branch, host) => await UpdateSkillAsync(force, output, branch, host), forceOption, outputDirOption, branchOption, hostOption);
         rootCommand.Add(updateSkillCmd);
 
         // ===== skill-version command =====
@@ -802,9 +806,9 @@ class Program
             "GitHub branch to check against");
         var skillVersionCmd = new Command("skill-version", "Check the installed skill version and compare with remote")
         {
-            skillVersionOutputOption, skillVersionBranchOption
+            skillVersionOutputOption, skillVersionBranchOption, hostOption
         };
-        skillVersionCmd.SetHandler(async (output, branch) => await SkillVersionAsync(output, branch), skillVersionOutputOption, skillVersionBranchOption);
+        skillVersionCmd.SetHandler(async (output, branch, host) => await SkillVersionAsync(output, branch, host), skillVersionOutputOption, skillVersionBranchOption, hostOption);
         rootCommand.Add(skillVersionCmd);
 
         // ===== broker commands =====
@@ -1624,12 +1628,14 @@ class Program
     // ===== Update Skill Command =====
 
     private const string SkillRepo = "Redth/MauiDevFlow";
-    private const string SkillBasePath = ".claude/skills/maui-ai-debugging";
 
-    private static async Task UpdateSkillAsync(bool force, string? outputDir, string branch)
+    private static async Task UpdateSkillAsync(bool force, string? outputDir, string branch, string host)
     {
+        var normalizedHost = SkillHostPaths.NormalizeHost(host);
+        var sourceBasePath = SkillHostPaths.GetSourceBasePath(normalizedHost);
         var root = outputDir ?? Directory.GetCurrentDirectory();
-        var destBase = Path.Combine(root, SkillBasePath);
+        var installBasePath = SkillHostPaths.GetInstallBasePath(normalizedHost);
+        var destBase = Path.Combine(root, installBasePath);
 
         using var http = new HttpClient();
         http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MauiDevFlow-CLI", "1.0"));
@@ -1656,7 +1662,8 @@ class Program
 
         Console.WriteLine();
         Console.WriteLine("maui-devflow update-skill");
-        Console.WriteLine($"  Source: https://github.com/{SkillRepo}/tree/{branch}/{SkillBasePath}");
+        Console.WriteLine($"  Host: {normalizedHost}");
+        Console.WriteLine($"  Source: https://github.com/{SkillRepo}/tree/{branch}/{sourceBasePath}");
         Console.WriteLine($"  Destination: {destBase}");
         Console.WriteLine();
         Console.WriteLine("Files to download:");
@@ -1664,7 +1671,7 @@ class Program
         {
             var destPath = Path.Combine(destBase, file);
             var exists = File.Exists(destPath);
-            Console.WriteLine($"  {SkillBasePath}/{file}{(exists ? " (overwrite)" : " (new)")}");
+            Console.WriteLine($"  {installBasePath}/{file}{(exists ? " (overwrite)" : " (new)")}");
         }
         Console.WriteLine();
 
@@ -1682,7 +1689,7 @@ class Program
         var success = 0;
         foreach (var file in files)
         {
-            var url = $"https://raw.githubusercontent.com/{SkillRepo}/{branch}/{SkillBasePath}/{file}";
+            var url = $"https://raw.githubusercontent.com/{SkillRepo}/{branch}/{sourceBasePath}/{file}";
             var destPath = Path.Combine(destBase, file);
 
             try
@@ -1705,21 +1712,22 @@ class Program
             : $"Done. {success}/{files.Count} files updated.");
 
         // Write .skill-version with the latest commit SHA
-        await WriteSkillVersionAsync(http, destBase, branch);
+        await WriteSkillVersionAsync(http, destBase, branch, sourceBasePath, normalizedHost);
     }
 
-    private static async Task WriteSkillVersionAsync(HttpClient http, string destBase, string branch)
+    private static async Task WriteSkillVersionAsync(HttpClient http, string destBase, string branch, string sourceBasePath, string host)
     {
         try
         {
-            var sha = await GetRemoteSkillCommitShaAsync(http, branch);
+            var sha = await GetRemoteSkillCommitShaAsync(http, branch, sourceBasePath);
             if (sha == null) return;
 
             var versionInfo = new
             {
                 commit = sha,
                 updatedAt = DateTime.UtcNow.ToString("o"),
-                branch
+                branch,
+                host
             };
             var versionPath = Path.Combine(destBase, ".skill-version");
             await File.WriteAllTextAsync(versionPath,
@@ -1728,9 +1736,9 @@ class Program
         catch { /* non-fatal — version tracking is best-effort */ }
     }
 
-    private static async Task<string?> GetRemoteSkillCommitShaAsync(HttpClient http, string branch)
+    private static async Task<string?> GetRemoteSkillCommitShaAsync(HttpClient http, string branch, string sourceBasePath)
     {
-        var url = $"https://api.github.com/repos/{SkillRepo}/commits?path={SkillBasePath}&sha={branch}&per_page=1";
+        var url = $"https://api.github.com/repos/{SkillRepo}/commits?path={sourceBasePath}&sha={branch}&per_page=1";
         var json = await http.GetStringAsync(url);
         var commits = JsonSerializer.Deserialize<JsonElement>(json);
         foreach (var commit in commits.EnumerateArray())
@@ -1738,10 +1746,13 @@ class Program
         return null;
     }
 
-    private static async Task SkillVersionAsync(string? outputDir, string branch)
+    private static async Task SkillVersionAsync(string? outputDir, string branch, string host)
     {
+        var normalizedHost = SkillHostPaths.NormalizeHost(host);
         var root = outputDir ?? Directory.GetCurrentDirectory();
-        var destBase = Path.Combine(root, SkillBasePath);
+        var installBasePath = SkillHostPaths.GetInstallBasePath(normalizedHost);
+        var sourceBasePath = SkillHostPaths.GetSourceBasePath(normalizedHost);
+        var destBase = Path.Combine(root, installBasePath);
         var versionPath = Path.Combine(destBase, ".skill-version");
 
         // Read local version
@@ -1764,10 +1775,11 @@ class Program
         if (localSha == null)
         {
             Console.WriteLine("No local skill version found.");
-            Console.WriteLine("Run 'maui-devflow update-skill' to install the skill and track its version.");
+            Console.WriteLine($"Run 'maui-devflow update-skill --host {normalizedHost}' to install the skill and track its version.");
             return;
         }
 
+        Console.WriteLine($"Host:      {normalizedHost}");
         Console.WriteLine($"Installed: {localSha[..12]} (branch: {localBranch ?? "unknown"})");
         if (localDate != null && DateTime.TryParse(localDate, out var dt))
             Console.WriteLine($"Updated:   {dt:yyyy-MM-dd HH:mm:ss} UTC");
@@ -1779,7 +1791,7 @@ class Program
 
         try
         {
-            var remoteSha = await GetRemoteSkillCommitShaAsync(http, branch);
+            var remoteSha = await GetRemoteSkillCommitShaAsync(http, branch, sourceBasePath);
             if (remoteSha == null)
             {
                 Console.WriteLine("Could not fetch remote version.");
@@ -1791,7 +1803,7 @@ class Program
             if (string.Equals(localSha, remoteSha, StringComparison.OrdinalIgnoreCase))
                 Console.WriteLine("\n✓ Skill is up to date.");
             else
-                Console.WriteLine("\n⚠ Update available! Run 'maui-devflow update-skill' to get the latest version.");
+                Console.WriteLine($"\n⚠ Update available! Run 'maui-devflow update-skill --host {normalizedHost}' to get the latest version.");
         }
         catch (Exception ex)
         {
@@ -1802,7 +1814,7 @@ class Program
     private static async Task<List<string>> GetSkillFilesFromGitHubAsync(HttpClient http, string branch)
     {
         var files = new List<string>();
-        await ListGitHubDirectoryAsync(http, SkillBasePath, "", files, branch);
+        await ListGitHubDirectoryAsync(http, SkillHostPaths.CanonicalSourceBasePath, "", files, branch);
         return files;
     }
 

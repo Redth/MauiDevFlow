@@ -33,7 +33,7 @@ manually check the simulator.
 - **Broker Daemon** — Automatic port assignment and agent discovery for simultaneous multi-app debugging
 - **CLI Tool** (`maui-devflow`) — Scriptable commands for both native and Blazor automation
 - **Driver Library** — Platform-aware (Mac Catalyst, Android, iOS Simulator, Linux/GTK) orchestration
-- **AI Skill** — Claude Code skill (`.claude/skills/maui-ai-debugging`) for AI-driven development workflows
+- **AI Skill** — Installable skill for Claude Code or Codex, plus MCP support for other compatible hosts
 
 ## Quick Start
 
@@ -41,11 +41,13 @@ manually check the simulator.
 
 The fastest way to get started is to let your AI agent set everything up using the included skill:
 
-**1. Install the CLI tool and download the skill:**
+**1. Install the CLI tool and download the skill for your host:**
 
 ```bash
 dotnet tool install --global Redth.MauiDevFlow.CLI
-maui-devflow update-skill
+maui-devflow update-skill --host claude
+# or
+maui-devflow update-skill --host codex
 ```
 
 **2. Ask your AI agent to set up MauiDevFlow:**
@@ -399,8 +401,8 @@ Hybrid page, connected via Shell navigation (`//native` and `//blazor` routes). 
 
 ## AI Agent Integration
 
-This project includes a Claude Code skill (`.claude/skills/maui-ai-debugging`) that teaches AI
-agents the complete build → deploy → inspect → fix feedback loop. The skill covers:
+This project includes an installable AI skill for Claude Code and Codex that teaches AI agents
+the complete build → deploy → inspect → fix feedback loop. The skill covers:
 
 - Installing and configuring all required tools
 - Building and deploying to iOS simulators, Android emulators, Mac Catalyst, and Linux/GTK
@@ -415,26 +417,30 @@ The CLI can download the latest skill files directly from GitHub into your proje
 
 ```bash
 # Interactive — shows files and asks for confirmation
-maui-devflow update-skill
+maui-devflow update-skill --host claude
 
 # Skip confirmation
-maui-devflow update-skill -y
+maui-devflow update-skill --host codex -y
 
 # Download to a specific directory
-maui-devflow update-skill -o /path/to/my-project
+maui-devflow update-skill --host codex -o /path/to/my-project
 
 # Use a different branch
-maui-devflow update-skill -b dev
+maui-devflow update-skill --host claude -b dev
 ```
 
-This downloads the skill files into `.claude/skills/maui-ai-debugging/` relative to the output
-directory (or current directory if `--output` is not specified). Existing files are overwritten.
-The file list is discovered dynamically from the repository, so new reference docs are picked up
-automatically.
+This downloads the skill files into a host-specific path relative to the output directory
+(or current directory if `--output` is not specified):
+
+- Claude: `.claude/skills/maui-ai-debugging/`
+- Codex: `.agents/skills/maui-ai-debugging/`
+
+Existing files are overwritten. The file list is discovered dynamically from the repository, so
+new reference docs are picked up automatically.
 
 ## MCP Server
 
-MauiDevFlow includes an MCP (Model Context Protocol) server for integration with AI coding agents in VS Code Copilot Chat, Claude Desktop, and other MCP-compatible hosts. The MCP server returns structured JSON and inline images — enabling AI agents to see screenshots directly and query the visual tree without text parsing.
+MauiDevFlow includes an MCP (Model Context Protocol) server for integration with AI coding agents in VS Code Copilot Chat, Claude Desktop, Codex hosts that support MCP, and other compatible clients. The MCP server returns structured JSON and inline images — enabling AI agents to see screenshots directly and query the visual tree without text parsing.
 
 ### Configuration
 
