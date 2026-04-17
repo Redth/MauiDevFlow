@@ -522,6 +522,17 @@ something that would require OS-level control (e.g., dismissing a system dialog 
 app), **ask the user** to do it manually rather than attempting automation that would hijack
 their input.
 
+### Exceptions — CI / Unattended Environments
+
+The reference files document OS-level tools (`osascript`, `xdotool`) that conflict with
+the rules above. Those tools exist for **unattended environments only** (CI pipelines,
+remote sessions with no active user). Even there, they must only be used as a
+**last-resort troubleshooting step** when the app is non-responsive and `maui-devflow`
+commands cannot reach it — never for routine app interaction or testing.
+
+In any attended / shared-desktop session, **ask the user** to perform the action manually
+instead of using OS-level automation.
+
 ## Tips
 
 - **Use `maui-devflow batch`** for multi-step interactions — resolves port once, adds delays,
