@@ -284,6 +284,44 @@ public class VisualTreeWalker
     public BoundsInfo? ResolveWindowBoundsPublic(VisualElement ve) => ResolveWindowBounds(ve);
 
     /// <summary>
+    /// Walks the native platform accessibility tree (VoiceOver on iOS, TalkBack on Android,
+    /// Narrator on Windows, VoiceOver on macOS) and returns elements in the exact order
+    /// a screen reader would visit them. Override in platform-specific subclasses.
+    /// Must be called after WalkTree so that _elementIdToExternalId is populated.
+    /// </summary>
+    public virtual List<NativeScreenReaderEntry> GetNativeA11yTree(Application app, int windowIndex)
+        => new();
+
+    /// <summary>
+    /// Builds a map from native platform view object → MAUI external element ID.
+    /// Uses the _elementIdToExternalId map populated by a prior WalkTree call.
+    /// Call this from GetNativeA11yTree implementations to correlate native elements back to MAUI IDs.
+    /// </summary>
+    protected Dictionary<object, string> BuildNativeViewToIdMap(Application app, int windowIndex)
+    {
+        var map = new Dictionary<object, string>(ReferenceEqualityComparer.Instance);
+        var targetWindow = windowIndex >= 0 && windowIndex < app.Windows.Count
+            ? app.Windows[windowIndex]
+            : app.Windows.FirstOrDefault();
+        if (targetWindow is IVisualTreeElement windowElement)
+            BuildNativeViewMapRecursive(windowElement, map);
+        return map;
+    }
+
+    private void BuildNativeViewMapRecursive(IVisualTreeElement element, Dictionary<object, string> map, int depth = 0)
+    {
+        if (depth > 120) return;
+        if (element is VisualElement ve)
+        {
+            var platformView = ve.Handler?.PlatformView;
+            if (platformView != null && _elementIdToExternalId.TryGetValue(ve.Id, out var externalId))
+                map[platformView] = externalId;
+        }
+        foreach (var child in element.GetVisualChildren())
+            BuildNativeViewMapRecursive(child, map, depth + 1);
+    }
+
+    /// <summary>
     /// Walks the visual tree starting from the application's windows.
     /// When windowIndex is null, walks all windows. Otherwise walks only the specified window.
     /// </summary>
@@ -1249,6 +1287,9 @@ public class VisualTreeWalker
             // Populate native view info from handler
             PopulateNativeInfo(info, ve);
 
+            // Populate native accessibility info
+            PopulateAccessibilityInfo(info, ve);
+
             // Resolve window-absolute bounds via platform-native APIs
             info.WindowBounds = ResolveWindowBounds(ve);
         }
@@ -1383,6 +1424,115 @@ public class VisualTreeWalker
         {
             // Native info is best-effort; don't fail the tree walk
         }
+    }
+
+    /// <summary>
+    /// Populates native accessibility properties from platform APIs.
+    /// Base implementation uses MAUI SemanticProperties; platform overrides add native data.
+    /// </summary>
+    protected virtual void PopulateAccessibilityInfo(ElementInfo info, VisualElement ve)
+    {
+        try
+        {
+            var a11y = new AccessibilityInfo();
+            var hasData = false;
+
+            // MAUI SemanticProperties (cross-platform)
+            var desc = SemanticProperties.GetDescription(ve);
+            if (!string.IsNullOrEmpty(desc))
+            {
+                a11y.Label = desc;
+                hasData = true;
+            }
+
+            var hint = SemanticProperties.GetHint(ve);
+            if (!string.IsNullOrEmpty(hint))
+            {
+                a11y.Hint = hint;
+                hasData = true;
+            }
+
+            var headingLevel = SemanticProperties.GetHeadingLevel(ve);
+            if (headingLevel != SemanticHeadingLevel.None)
+            {
+                a11y.IsHeading = true;
+                hasData = true;
+            }
+
+            // Determine focusability from element type (interactive elements are focusable)
+            if (ve is View)
+            {
+                var isFocusable = ve is Button or ImageButton or Entry or Editor
+                    or Switch or CheckBox or RadioButton or Slider or Stepper
+                    or Picker or DatePicker or TimePicker or SearchBar;
+                a11y.IsFocusable = isFocusable;
+                if (isFocusable) hasData = true;
+            }
+
+            a11y.IsEnabled = ve.IsEnabled;
+            a11y.IsFocused = ve.IsFocused;
+
+            // Determine role from element type
+            a11y.Role = ve switch
+            {
+                Button => "Button",
+                ImageButton => "Button",
+                Label => "StaticText",
+                Entry => "TextField",
+                Editor => "TextArea",
+                Switch => "Switch",
+                CheckBox => "CheckBox",
+                RadioButton => "RadioButton",
+                Slider => "Slider",
+                Stepper => "Stepper",
+                Picker => "ComboBox",
+                DatePicker => "DatePicker",
+                TimePicker => "TimePicker",
+                SearchBar => "SearchField",
+                Image => "Image",
+                ProgressBar => "ProgressBar",
+                ActivityIndicator => "BusyIndicator",
+                _ => null
+            };
+            if (a11y.Role != null) hasData = true;
+
+            // Determine if this is an accessibility element (leaf that screen reader should visit)
+            a11y.IsAccessibilityElement = IsAccessibilityLeaf(ve);
+            if (a11y.IsAccessibilityElement) hasData = true;
+
+            if (hasData)
+                info.Accessibility = a11y;
+        }
+        catch
+        {
+            // Accessibility info is best-effort
+        }
+    }
+
+    /// <summary>
+    /// Determines whether an element is a leaf accessibility element (one the screen reader would stop on).
+    /// </summary>
+    private static bool IsAccessibilityLeaf(VisualElement ve)
+    {
+        // Elements with explicit semantic description are accessibility elements
+        if (!string.IsNullOrEmpty(SemanticProperties.GetDescription(ve)))
+            return true;
+
+        // Interactive controls are accessibility elements
+        if (ve is Button or ImageButton or Entry or Editor or Switch or CheckBox
+            or RadioButton or Slider or Stepper or Picker or DatePicker or TimePicker
+            or SearchBar)
+            return true;
+
+        // Labels with text
+        if (ve is Label label && !string.IsNullOrEmpty(label.Text))
+            return true;
+
+        // Images with AutomationId (likely meaningful)
+        if (ve is Image && !string.IsNullOrEmpty(ve.AutomationId))
+            return true;
+
+        return false;
     }
 
     /// <summary>

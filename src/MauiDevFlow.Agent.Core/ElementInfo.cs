@@ -64,6 +64,28 @@ public class ElementInfo
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Dictionary<string, string?>? NativeProperties { get; set; }
 
+    /// <summary>
+    /// Effective text color as rendered by the platform (after theme/style resolution).
+    /// Format: #AARRGGBB hex string. Only populated for text-rendering elements.
+    /// Use this instead of fetching TextColor via /api/property — MAUI TextColor is often
+    /// null (theme default), while this reflects the actual rendered color.
+    /// </summary>
+    [JsonPropertyName("effectiveTextColor")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? EffectiveTextColor { get; set; }
+
+    /// <summary>
+    /// Effective background color as rendered by the platform (after theme/style resolution).
+    /// Format: #AARRGGBB hex string.
+    /// </summary>
+    [JsonPropertyName("effectiveBackgroundColor")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? EffectiveBackgroundColor { get; set; }
+
+    [JsonPropertyName("accessibility")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AccessibilityInfo? Accessibility { get; set; }
+
     [JsonPropertyName("children")]
     public List<ElementInfo>? Children { get; set; }
 }
@@ -84,6 +106,104 @@ public class BoundsInfo
 
     [JsonPropertyName("height")]
     public double Height { get; set; }
+}
+
+/// <summary>
+/// Native accessibility properties extracted from the platform accessibility APIs.
+/// </summary>
+public class AccessibilityInfo
+{
+    [JsonPropertyName("isAccessibilityElement")]
+    public bool IsAccessibilityElement { get; set; }
+
+    [JsonPropertyName("label")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Label { get; set; }
+
+    [JsonPropertyName("hint")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Hint { get; set; }
+
+    [JsonPropertyName("value")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Value { get; set; }
+
+    [JsonPropertyName("role")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Role { get; set; }
+
+    [JsonPropertyName("traits")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Traits { get; set; }
+
+    [JsonPropertyName("isEnabled")]
+    public bool IsEnabled { get; set; } = true;
+
+    [JsonPropertyName("isFocusable")]
+    public bool IsFocusable { get; set; }
+
+    [JsonPropertyName("isFocused")]
+    public bool IsFocused { get; set; }
+
+    [JsonPropertyName("isHeading")]
+    public bool IsHeading { get; set; }
+
+    [JsonPropertyName("order")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Order { get; set; }
+
+    [JsonPropertyName("childCount")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ChildCount { get; set; }
+
+    [JsonPropertyName("liveRegion")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? LiveRegion { get; set; }
+}
+
+/// <summary>
+/// An element in the native screen reader traversal order, as the platform accessibility
+/// framework would present it (VoiceOver on iOS, TalkBack on Android, etc.).
+/// </summary>
+public class NativeScreenReaderEntry
+{
+    [JsonPropertyName("order")]
+    public int Order { get; set; }
+
+    [JsonPropertyName("label")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Label { get; set; }
+
+    [JsonPropertyName("hint")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Hint { get; set; }
+
+    [JsonPropertyName("value")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Value { get; set; }
+
+    [JsonPropertyName("role")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Role { get; set; }
+
+    [JsonPropertyName("traits")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Traits { get; set; }
+
+    [JsonPropertyName("isHeading")]
+    public bool IsHeading { get; set; }
+
+    [JsonPropertyName("windowBounds")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public BoundsInfo? WindowBounds { get; set; }
+
+    [JsonPropertyName("elementId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ElementId { get; set; }
+
+    [JsonPropertyName("nativeType")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? NativeType { get; set; }
 }
 
 /// <summary>
